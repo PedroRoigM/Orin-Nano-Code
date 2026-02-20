@@ -5,6 +5,7 @@ from core.processing.emotion_color_mapper import EmotionColorMapper
 from core.udp_sender import UDPSender
 from core.utils.port import Port
 from core.controllers.holo_controller import HoloController
+from core.controllers.audio_controller import AudioController
 from core.utils.eeg_plotter import EEGPlotter
 from core.utils.brain_controller import BrainController
 from core.utils.robot_behavior_manager import RobotBehaviorManager
@@ -13,6 +14,7 @@ import time
 
 def main():
     holoController = HoloController(port_name='COM5')
+    audioController = AudioController(port_name='COM5')
     brainController = BrainController()
     robotBehaviorManager = RobotBehaviorManager()
     
@@ -112,6 +114,8 @@ def main():
             
             # Enviar por el puerto
             holoController.changeHoloRGBColor(3, 1, colors)
+            audioController.reactToEmotion(emotions)
+            audioController.adjustVolumeByArousal(emotions)
 
             # Enviar por UDP
             udp_sender.send(emotions_with_colors)
