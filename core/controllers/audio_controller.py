@@ -39,6 +39,11 @@ class AudioController:
 		"estres":     "negative",
 	}
 
+	# TODO: rellenar con los números de pista reales cuando se organicen las carpetas
+	TRACK_LOW  = None  # [num] pista suave
+	TRACK_MID  = None  # [num] pista media
+	TRACK_HIGH = None  # [num] pista enérgica
+
 	_EXCLUDE = {"valence", "arousal", "categoria_russell"}
 
 	def __init__(self, port_name='/dev/ttyACM1'):
@@ -115,12 +120,11 @@ class AudioController:
 			print(f"ERROR: {e}")
 			return
 
-	def _scoreToAudio(self, score: float, levels: int = 3, base: int = 49) -> int:
-		"""Mapea un score (0.0-1.0) a un número de pista de audio.
-		Con levels=3 y base=49: score bajo→49, medio→50, alto→51.
-		"""
+	def _scoreToAudio(self, score: float, levels: int = 3) -> int:
+		"""Mapea un score (0.0-1.0) a una pista: TRACK_LOW, TRACK_MID o TRACK_HIGH."""
+		tracks = [self.TRACK_LOW, self.TRACK_MID, self.TRACK_HIGH][:levels]
 		idx = min(int(score * levels), levels - 1)
-		return base + idx
+		return tracks[idx]
 
 	def _getDominantEmotion(self, emotions: dict):
 		scores = {
@@ -133,7 +137,7 @@ class AudioController:
 			return None
 		return max(scores, key=scores.get)
 
-	def reactToEmotion(self, emotions: dict, all: int = 1, levels: int = 3, base_audio: int = 49):
+	def reactToEmotion(self, emotions: dict, all: int = 1, levels: int = 3, audio: int = 49):
 		dominant = self._getDominantEmotion(emotions)
 		if dominant is None:
 			return
@@ -142,9 +146,12 @@ class AudioController:
 		# Emociones negativas: invertir la intensidad para que R2 sea más suave
 		if self.EMOTION_POLARITY.get(dominant) == "negative":
 			score = 1.0 - score
-		audio = self._scoreToAudio(score, levels=levels, base=base_audio)
-		print(f"[AUDIO] {dominant} (score={score:.2f}) → folder {folder}, pista {audio}")
-		self.playAudio(all=all, folder=folder, audio=audio)
+		track = self._scoreToAudio(score, levels=levels)
+		# Si las pistas aún no están definidas, usa el valor por defecto
+		if track is None:
+			track = audio
+		print(f"[AUDIO] {dominant} (score={score:.2f}) → folder {folder}, pista {track}")
+		self.playAudio(all=all, folder=folder, audio=track)
 
 	def reactToRussell(self, emotions: dict, all: int = 1, audio: int = 49):
 		category = emotions.get("categoria_russell", "")
