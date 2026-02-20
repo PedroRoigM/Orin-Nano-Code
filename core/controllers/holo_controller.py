@@ -1,6 +1,6 @@
-from port import Port
-from commandValues import CommandValues
-from nodeValues import NodeValues
+from core.controllers.port import Port
+from core.controllers.commandValues import CommandValues
+from core.controllers.nodeValues import NodeValues
 
 class HoloController:
 	def __init__(self, port_name=None):
