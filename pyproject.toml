@@ -1,0 +1,14 @@
+[project]
+name = "orin-nano-code"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "mediapipe>=0.10.32",
+    "opencv-python>=4.13.0.92",
+    "pillow>=12.1.1",
+    "pyserial>=3.5",
+    "torch>=2.10.0",
+    "transformers>=5.2.0",
+]
