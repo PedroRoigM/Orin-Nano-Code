@@ -114,8 +114,8 @@ def main():
             
             # Enviar por el puerto
             holoController.changeHoloRGBColor(3, 1, colors)
-            audioController.reactToEmotion(emotions)
-            audioController.adjustVolumeByArousal(emotions)
+            # audioController.reactToEmotion(emotions)
+            # audioController.adjustVolumeByArousal(emotions)
 
             # Enviar por UDP
             udp_sender.send(emotions_with_colors)
