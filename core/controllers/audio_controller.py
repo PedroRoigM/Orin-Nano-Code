@@ -1,7 +1,7 @@
-from port import Port
+from core.controllers.port import Port
 from enum import IntEnum
-from commandValues import CommandValues
-from nodeValues import NodeValues
+from core.controllers.commandValues import CommandValues
+from core.controllers.nodeValues import NodeValues
 
 class AudioController:
 
