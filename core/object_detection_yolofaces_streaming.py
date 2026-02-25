@@ -1,13 +1,27 @@
 import cv2
 from jetcam.csi_camera import CSICamera
-from core.controllers.port import Port
-from core.controllers.servo_controller import ServoController
+from port import Port
+from servo_controller import ServoController
 import random
 from time import time
 import torch
 from facenet_pytorch import MTCNN
 
-# Initialize MTCNN face detector (very accurate)
+# ==============================
+# CONFIGURATION
+# ==============================
+
+receiver_ip = "192.168.1.100"   # <-- CHANGE THIS
+receiver_port = 5000
+
+frame_width = 640
+frame_height = 480
+fps = 30
+
+# ==============================
+# INITIALIZE FACE DETECTOR
+# ==============================
+
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 mtcnn = MTCNN(
@@ -17,117 +31,159 @@ mtcnn = MTCNN(
     thresholds=[0.6, 0.7, 0.7]
 )
 
-# Open the camera (CSI Camera)
-cap = CSICamera(capture_device=0, width=640, height=480)
+# ==============================
+# CAMERA SETUP
+# ==============================
 
-# Get the video frame size and frame rate
-frame_width = 640
-frame_height = 480
-fps = 1
+cap = CSICamera(
+    capture_device=0,
+    width=frame_width,
+    height=frame_height
+)
 
-# Define the codec and create a VideoWriter object
-output_path = "/home/jetson/ultralytics/ultralytics/output/01.face_detection.mp4"
-fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-out = cv2.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
+# ==============================
+# GStreamer UDP Streaming Pipeline
+# Uses Jetson hardware encoder
+# ==============================
 
-# Initialize serial port communication
+gst_out = (
+    "appsrc ! "
+    "videoconvert ! "
+    "video/x-raw,format=I420 ! "
+    "nvv4l2h264enc bitrate=4000000 insert-sps-pps=true ! "
+    "h264parse ! "
+    "rtph264pay config-interval=1 pt=96 ! "
+    f"udpsink host={receiver_ip} port={receiver_port} sync=false"
+)
+
+out = cv2.VideoWriter(
+    gst_out,
+    cv2.CAP_GSTREAMER,
+    0,
+    fps,
+    (frame_width, frame_height),
+    True
+)
+
+if not out.isOpened():
+    print("Failed to open GStreamer pipeline")
+    exit()
+
+# ==============================
+# SERVO + SERIAL INIT
+# ==============================
+
 port = Port()
+servoController = ServoController()
 
-# Initialize servo positions
-prev_person_position_x, prev_person_position_y, prev_y_pos, prev_x_pos = 127, 127, 127, 127
+prev_person_position_x = 127
+prev_person_position_y = 127
+prev_y_pos = 127
+prev_x_pos = 127
+
 init_time = time()
 new_pos_time = 2
 move_command = 75
-servoController = ServoController()
 
 new_prediction_time = 1
 last_prediction_time = time() - 1
 
-# Loop through the video frames
+print("Streaming started...")
+
+# ==============================
+# MAIN LOOP
+# ==============================
+
 while True:
-	frame = cap.read()
-	if frame is not None:
-		# Flipping the frame
-		frame = cv2.flip(frame, 1)
 
-		# Random servo movement
-		if time() >= init_time + new_pos_time:
-			x_serv_pos = int(random.random() * 255)
-			y_serv_pos = int(random.random() * 255)
+    frame = cap.read()
 
-			if abs(x_serv_pos - prev_x_pos) > 70 and abs(y_serv_pos - prev_y_pos) > 70:
-				move_command = 83
-			else:
-				move_command = 75
+    if frame is None:
+        print("No frame received.")
+        break
 
-			servoController.moveServoFast(0, 3, x_serv_pos)
-			servoController.moveServoFast(0, 2, y_serv_pos)
-			init_time = time()
-			prev_x_pos = x_serv_pos
-			prev_y_pos = y_serv_pos
+    frame = cv2.flip(frame, 1)
 
-		# Convert BGR to RGB for MTCNN
-		rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    # --------------------------
+    # RANDOM SERVO MOVEMENT
+    # --------------------------
+    if time() >= init_time + new_pos_time:
+        x_serv_pos = int(random.random() * 255)
+        y_serv_pos = int(random.random() * 255)
 
-		# Detect faces
-		if last_prediction_time <= time() + new_prediction_time:
-			boxes, probs = mtcnn.detect(rgb_frame)
-			last_prediction_time = time()
-		face_number = 0
+        if abs(x_serv_pos - prev_x_pos) > 70 and abs(y_serv_pos - prev_y_pos) > 70:
+            move_command = 83
+        else:
+            move_command = 75
 
-		# Process detected faces
-		if boxes is not None:
-			for i, box in enumerate(boxes):
-				if probs[i] > 0.90:  # Confidence threshold
-					x1, y1, x2, y2 = box.astype(int)
+        servoController.moveServoFast(0, 3, x_serv_pos)
+        servoController.moveServoFast(0, 2, y_serv_pos)
 
-					# Ensure coordinates are within bounds
-					x1 = max(0, x1)
-					y1 = max(0, y1)
-					x2 = min(frame_width, x2)
-					y2 = min(frame_height, y2)
+        init_time = time()
+        prev_x_pos = x_serv_pos
+        prev_y_pos = y_serv_pos
 
-					w = x2 - x1
-					h = y2 - y1
+    # --------------------------
+    # FACE DETECTION
+    # --------------------------
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-					# Calculate center of face for servo control
-					center_x = int((x1 + x2) / 2)
-					center_y = int((y1 + y2) / 2)
+    if last_prediction_time <= time() + new_prediction_time:
+        boxes, probs = mtcnn.detect(rgb_frame)
+        last_prediction_time = time()
 
-					# Control servos with first detected face only
-					if face_number == 0:
-						# Map center coordinates to servo range (0-255)
-						servo_x = int((center_x / frame_width) * 255)
-						servo_y = int((center_y / frame_height) * 255)
-						if abs(prev_person_position_x - servo_x) > 50 or abs(prev_person_position_y - servo_y) > 50:
-							servoController.moveServoFast(0, 0, servo_x)
-							servoController.moveServoFast(0, 1, servo_y)
-						else:
-							servoController.moveServoSlow(0, 0, servo_x)
-							servoController.moveServoSlow(0, 1, servo_y)
-					face_number += 1
+    face_number = 0
 
-					# Draw rectangle around face
-					cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    if boxes is not None:
+        for i, box in enumerate(boxes):
+            if probs[i] > 0.90:
 
-					# Draw face info with confidence
-					label = f"Face {face_number}: {w}x{h} ({probs[i]:.2f})"
-					cv2.putText(frame, label, (x1, y1-10),
-					cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-		# Write the annotated frame to the output video file
-		out.write(frame)
+                x1, y1, x2, y2 = box.astype(int)
 
-		# Display the annotated frame
-		cv2.imshow("Face Detection", frame)
+                x1 = max(0, x1)
+                y1 = max(0, y1)
+                x2 = min(frame_width, x2)
+                y2 = min(frame_height, y2)
 
-		# Break the loop if 'q' is pressed
-		if cv2.waitKey(1) & 0xFF == ord("q"):
-			break
-	else:
-		print("No frame received, breaking the loop.")
-		break
+                w = x2 - x1
+                h = y2 - y1
 
-# Release resources
+                center_x = int((x1 + x2) / 2)
+                center_y = int((y1 + y2) / 2)
+
+                if face_number == 0:
+                    servo_x = int((center_x / frame_width) * 255)
+                    servo_y = int((center_y / frame_height) * 255)
+
+                    if abs(prev_person_position_x - servo_x) > 50 or abs(prev_person_position_y - servo_y) > 50:
+                        servoController.moveServoFast(0, 0, servo_x)
+                        servoController.moveServoFast(0, 1, servo_y)
+                    else:
+                        servoController.moveServoSlow(0, 0, servo_x)
+                        servoController.moveServoSlow(0, 1, servo_y)
+
+                    prev_person_position_x = servo_x
+                    prev_person_position_y = servo_y
+
+                face_number += 1
+
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+                label = f"Face {face_number}: {w}x{h} ({probs[i]:.2f})"
+                cv2.putText(frame, label, (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                            (0, 255, 0), 2)
+
+    # --------------------------
+    # STREAM FRAME
+    # --------------------------
+    out.write(frame)
+
+# ==============================
+# CLEANUP
+# ==============================
+
 cap.release()
 out.release()
-cv2.destroyAllWindows()
+
+print("Streaming stopped.")
