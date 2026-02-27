@@ -1,12 +1,12 @@
 #include <LiquidCrystal.h> // Se incluye la librería [cite: 363]
 
 // Definición de los pines (mantengo los que usaste en tu código original)
-#define pin_RS 2
-#define pin_EN 3
+#define pin_RS 3
+#define pin_EN 2
 #define pin_D4 4
 #define pin_D5 5
-#define pin_D6 12
-#define pin_D7 13
+#define pin_D6 6
+#define pin_D7 7
 
 // Se crea el objeto pantalla [cite: 366]
 LiquidCrystal pantalla(pin_RS, pin_EN, pin_D4, pin_D5, pin_D6, pin_D7);
