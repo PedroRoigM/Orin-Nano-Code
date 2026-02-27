@@ -5,6 +5,8 @@ from facenet_pytorch import MTCNN
 import torch
 from time import time
 
+from processing.emotion_color_mapper import EmotionColorMapper
+
 # Config
 FRAME_W, FRAME_H = 640, 480
 CONF_THRESHOLD = 0.90
@@ -21,7 +23,7 @@ COLOR_MAP = {
 
 # ONNX Runtime — CoreML en Apple Silicon, CPU como fallback
 providers = ["CoreMLExecutionProvider", "CPUExecutionProvider"]
-session = ort.InferenceSession("emotion.onnx", providers=providers)
+session = ort.InferenceSession("core/emotion.onnx", providers=providers)
 input_name  = session.get_inputs()[0].name   # "Input3"
 output_name = session.get_outputs()[0].name  # "Plus692_Output_0"
 
@@ -48,6 +50,9 @@ mtcnn = MTCNN(
     post_process=False,
     select_largest=False,
 )
+
+# Emmotion mapper
+emotionMapper = EmotionColorMapper()
 
 # Cámara — webcam estándar (0 = built-in, 1 = externa)
 cap = cv2.VideoCapture(0)
@@ -99,15 +104,17 @@ try:
                 face_count += 1
                 face_roi = frame[y1:y2, x1:x2]
                 emotion, emo_conf = classify_emotion(face_roi)
-                color = COLOR_MAP.get(emotion, (255, 255, 255))
+                colors = emotionMapper.get_color_dict(emotion, confidence=emo_conf)
 
-                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                box_color = colors['dominant_rgb']
+                cv2.rectangle(frame, (x1, y1), (x2, y2), box_color, 2)
                 cv2.putText(frame, f"{emotion} {emo_conf:.0%}",
                             (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
-                            0.55, color, 2)
+                            0.55, box_color, 2)
                 if face_count == 1:
                     face_center = [x2 - x1, y2 - y1]
                     print(f"Emotion: {emotion} at {face_center}")
+                    print(box_color)
 
         cv2.putText(frame, f"FPS: {fps:.1f} | Faces: {face_count}",
                     (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
