@@ -3,13 +3,17 @@ const int echoPin = 2;
 
 float duration, distance;
 
-void setup() {
+// El comment
+
+void setup()
+{
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
   Serial.begin(9600);
 }
 
-void loop() {
+void loop()
+{
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
   digitalWrite(trigPin, HIGH);
