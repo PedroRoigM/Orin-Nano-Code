@@ -3,6 +3,8 @@ const int echoPin = 2;
 
 float duration, distance;
 
+//Hola, este es un comentario de prueba para el repositorio de GitHub
+
 void setup() {
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
