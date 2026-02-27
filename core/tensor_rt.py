@@ -133,6 +133,9 @@ try:
                 cv2.putText(frame, f"{emotion} {emo_conf:.0%}",
                             (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
                             0.55, color, 2)
+                if face_count == 1:
+                    face_center = [x2 - x1, y2 - y1]
+                    print(f"Emotion: {emotion} at {face_center}")
 
         cv2.putText(frame, f"FPS: {fps:.1f} | Faces: {face_count}",
                     (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
