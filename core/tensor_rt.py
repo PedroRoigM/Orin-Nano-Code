@@ -8,19 +8,33 @@ import torch
 from time import time
 
 from processing.emotion_color_mapper import EmotionColorMapper
+from controllers.arduino_controller import ArduinoController
 
-
-#  Config 
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
 FRAME_W, FRAME_H = 640, 480
-CONF_THRESHOLD = 0.90
+CONF_THRESHOLD   = 0.90
 DETECT_EVERY_N_FRAMES = 2
 OUTPUT_PATH = "/home/jetson/prueba/output.mp4"
 EMOTIONS = ["neutral", "happiness", "surprise", "sadness",
             "anger", "disgust", "fear", "contempt"]
 
-#  TensorRT engine 
+# Arduino
+ARDUINO_PORT         = "/dev/ttyACM0"
+ARDUINO_BAUD         = 9600
+ULTRASONIC_THRESHOLD = 10.0   # cm — stop if sensor reads below this
+
+# Face-tracking tuning
+DEAD_ZONE_X = 60   # px — error band around frame center considered "centred"
+TURN_SPEED  = 45   # motor magnitude while turning  (1-127)
+FWD_SPEED   = 40   # motor magnitude while going forward (1-127)
+
+# ---------------------------------------------------------------------------
+# TensorRT engine
+# ---------------------------------------------------------------------------
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
-runtime = trt.Runtime(TRT_LOGGER)
+runtime    = trt.Runtime(TRT_LOGGER)
 
 with open("/home/jetson/prueba/emotion.trt", "rb") as f:
     engine = runtime.deserialize_cuda_engine(f.read())
@@ -40,6 +54,7 @@ stream   = cuda.Stream()
 context.set_tensor_address("Input3",           int(d_input))
 context.set_tensor_address("Plus692_Output_0", int(d_output))
 
+
 def classify_emotion(face_roi: np.ndarray) -> tuple[str, float]:
     if face_roi.size == 0:
         return "unknown", 0.0
@@ -56,7 +71,10 @@ def classify_emotion(face_roi: np.ndarray) -> tuple[str, float]:
     idx    = int(np.argmax(probs))
     return EMOTIONS[idx], float(probs[idx])
 
-#  MTCNN 
+
+# ---------------------------------------------------------------------------
+# MTCNN
+# ---------------------------------------------------------------------------
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(f"MTCNN device: {device}")
 
@@ -68,10 +86,18 @@ mtcnn = MTCNN(
     select_largest=False,
 )
 
-# Emmotion mapper
+# Emotion mapper
 emotionMapper = EmotionColorMapper()
 
-#  Cámara 
+# ---------------------------------------------------------------------------
+# Arduino — single hub for all hardware (sensors + motors + LEDs + LCD)
+# ---------------------------------------------------------------------------
+arduino = ArduinoController(ARDUINO_PORT, ARDUINO_BAUD, ULTRASONIC_THRESHOLD)
+arduino.start()
+
+# ---------------------------------------------------------------------------
+# Camera (CSI via GStreamer)
+# ---------------------------------------------------------------------------
 GST_PIPELINE = (
     "nvarguscamerasrc sensor_id=0 ! "
     "video/x-raw(memory:NVMM),width=640,height=480,framerate=30/1,format=NV12 ! "
@@ -86,20 +112,45 @@ if not cap.isOpened():
 out = cv2.VideoWriter(OUTPUT_PATH, cv2.VideoWriter_fourcc(*"mp4v"),
                       15, (FRAME_W, FRAME_H))
 
-#  Estado 
+# ---------------------------------------------------------------------------
+# State
+# ---------------------------------------------------------------------------
 boxes       = None
 det_probs   = None
 frame_count = 0
 fps_time    = time()
 fps         = 0.0
+FRAME_CX    = FRAME_W // 2
 
 print("Grabando... Pulsa Ctrl+C para detener.")
 
-# Pantalla completa
 cv2.namedWindow("Emotion Detection", cv2.WINDOW_NORMAL)
 cv2.setWindowProperty("Emotion Detection", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
 
+def drive_toward_face(face_cx: int) -> None:
+    """Turn or move forward to keep the first face centred on the X axis."""
+    error_x = face_cx - FRAME_CX
+
+    if abs(error_x) <= DEAD_ZONE_X:
+        if arduino.can_move_forward:
+            arduino.tank.forward(FWD_SPEED)
+        else:
+            arduino.tank.stop()
+    elif error_x < 0:
+        if arduino.can_turn:
+            arduino.tank.turn_left(TURN_SPEED)
+        else:
+            arduino.tank.stop()
+    else:
+        if arduino.can_turn:
+            arduino.tank.turn_right(TURN_SPEED)
+        else:
+            arduino.tank.stop()
+
+# ---------------------------------------------------------------------------
+# Main loop
+# ---------------------------------------------------------------------------
 try:
     while True:
         ret, frame = cap.read()
@@ -139,11 +190,15 @@ try:
                 cv2.putText(frame, f"{emotion} {emo_conf:.0%}",
                             (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
                             0.55, box_color, 2)
-                if face_count == 1:
-                    face_center = [x2 - x1, y2 - y1]
-                    print(f"Emotion: {emotion} at {face_center}")
-                    print(box_color)
 
+                if face_count == 1:
+                    face_cx = (x1 + x2) // 2
+                    print(f"Emotion: {emotion} | face_cx: {face_cx} | error: {face_cx - FRAME_CX:+d}px")
+                    drive_toward_face(face_cx)
+
+        else:
+            # No face detected — stop and wait
+            arduino.tank.stop()
 
         cv2.putText(frame, f"FPS: {fps:.1f} | Faces: {face_count}",
                     (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
@@ -161,6 +216,7 @@ except KeyboardInterrupt:
     print("\nDetenido por el usuario.")
 
 finally:
+    arduino.stop()
     cap.release()
     out.release()
     cv2.destroyAllWindows()

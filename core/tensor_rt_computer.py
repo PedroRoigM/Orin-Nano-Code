@@ -31,6 +31,7 @@ def classify_emotion(face_roi: np.ndarray) -> tuple[str, float]:
     exp     = np.exp(logits - logits.max())
     probs   = exp / exp.sum()
     idx     = int(np.argmax(probs))
+    
     return EMOTIONS[idx], float(probs[idx])
 
 # MTCNN — CPU para compatibilidad
