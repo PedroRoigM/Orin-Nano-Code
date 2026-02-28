@@ -14,12 +14,6 @@ DETECT_EVERY_N_FRAMES = 2
 OUTPUT_PATH = "output.mp4"
 EMOTIONS = ["neutral", "happiness", "surprise", "sadness",
             "anger", "disgust", "fear", "contempt"]
-COLOR_MAP = {
-    "happiness": (0, 255, 0),   "anger":    (0, 0, 255),
-    "sadness":   (255, 0, 0),   "surprise": (0, 255, 255),
-    "fear":      (128, 0, 128), "disgust":  (0, 128, 0),
-    "contempt":  (128, 128, 0), "neutral":  (200, 200, 200),
-}
 
 # ONNX Runtime — CoreML en Apple Silicon, CPU como fallback
 providers = ["CoreMLExecutionProvider", "CPUExecutionProvider"]
@@ -39,7 +33,7 @@ def classify_emotion(face_roi: np.ndarray) -> tuple[str, float]:
     idx     = int(np.argmax(probs))
     return EMOTIONS[idx], float(probs[idx])
 
-# MTCNN — MPS en Apple Silicon, CPU si no
+# MTCNN — CPU para compatibilidad
 device = torch.device("cpu")
 print(f"MTCNN device: {device}")
 
@@ -72,6 +66,10 @@ fps         = 0.0
 
 print("Grabando... Pulsa 'q' para detener.")
 
+# Pantalla completa
+cv2.namedWindow("Emotion Detection", cv2.WINDOW_NORMAL)
+cv2.setWindowProperty("Emotion Detection", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+
 try:
     while True:
         ret, frame = cap.read()
@@ -81,7 +79,7 @@ try:
 
         frame_count += 1
 
-        if frame_count % 30 == 0:
+        if frame_count % 120 == 0:
             fps = 30 / (time() - fps_time)
             fps_time = time()
 

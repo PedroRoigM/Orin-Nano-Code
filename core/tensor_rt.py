@@ -7,6 +7,9 @@ from facenet_pytorch import MTCNN
 import torch
 from time import time
 
+from processing.emotion_color_mapper import EmotionColorMapper
+
+
 #  Config 
 FRAME_W, FRAME_H = 640, 480
 CONF_THRESHOLD = 0.90
@@ -14,12 +17,6 @@ DETECT_EVERY_N_FRAMES = 2
 OUTPUT_PATH = "/home/jetson/prueba/output.mp4"
 EMOTIONS = ["neutral", "happiness", "surprise", "sadness",
             "anger", "disgust", "fear", "contempt"]
-COLOR_MAP = {
-    "happiness": (0, 255, 0),   "anger":    (0, 0, 255),
-    "sadness":   (255, 0, 0),   "surprise": (0, 255, 255),
-    "fear":      (128, 0, 128), "disgust":  (0, 128, 0),
-    "contempt":  (128, 128, 0), "neutral":  (200, 200, 200),
-}
 
 #  TensorRT engine 
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
@@ -71,6 +68,9 @@ mtcnn = MTCNN(
     select_largest=False,
 )
 
+# Emmotion mapper
+emotionMapper = EmotionColorMapper()
+
 #  Cámara 
 GST_PIPELINE = (
     "nvarguscamerasrc sensor_id=0 ! "
@@ -94,6 +94,11 @@ fps_time    = time()
 fps         = 0.0
 
 print("Grabando... Pulsa Ctrl+C para detener.")
+
+# Pantalla completa
+cv2.namedWindow("Emotion Detection", cv2.WINDOW_NORMAL)
+cv2.setWindowProperty("Emotion Detection", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+
 
 try:
     while True:
@@ -127,15 +132,18 @@ try:
                 face_count += 1
                 face_roi = frame[y1:y2, x1:x2]
                 emotion, emo_conf = classify_emotion(face_roi)
-                color = COLOR_MAP.get(emotion, (255, 255, 255))
+                colors = emotionMapper.get_color_dict(emotion, confidence=emo_conf)
 
-                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                box_color = colors['dominant_rgb']
+                cv2.rectangle(frame, (x1, y1), (x2, y2), box_color, 2)
                 cv2.putText(frame, f"{emotion} {emo_conf:.0%}",
                             (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
-                            0.55, color, 2)
+                            0.55, box_color, 2)
                 if face_count == 1:
                     face_center = [x2 - x1, y2 - y1]
                     print(f"Emotion: {emotion} at {face_center}")
+                    print(box_color)
+
 
         cv2.putText(frame, f"FPS: {fps:.1f} | Faces: {face_count}",
                     (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
