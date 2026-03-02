@@ -4,60 +4,18 @@
 #include "GeneralController.h"
 #include "PinDeclaration.h"
 
-// ---------------------------------------------------------------------------
-// BuzzerController
 // Observer for "BUZZ" messages.
-// Message format: "<freq>,<duration_ms>"  or  "OFF"
-// ---------------------------------------------------------------------------
+// Message format: "<freq>,<duration_ms>" or "OFF"
 class BuzzerController : public GeneralController
 {
 public:
-    BuzzerController(const String &id, int pin)
-        : GeneralController(id), _pin(pin)
-    {
-        pinMode(_pin, OUTPUT);
-    }
+    BuzzerController(const String &id, int pin);
 
-    // -----------------------------------------------------------------------
-    // sanityTest() — plays a short beep and reports to Serial.
-    // -----------------------------------------------------------------------
-    void sanityTest()
-    {
-        Serial.print(F("[SanityTest] "));
-        Serial.print(observerId);
-        Serial.print(F(" ... "));
-
-        tone(_pin, 1000, 300); // 1 kHz for 300 ms
-        delay(400);            // wait for tone to finish
-
-        Serial.println(F("PASS"));
-    }
-
-    void Update(const String &message) override
-    {
-        parseMessage(message);
-    }
+    void sanityTest();
+    void Update(const String &message) override;
 
 protected:
-    void parseMessage(const String &message) override
-    {
-        if (message == "OFF")
-        {
-            noTone(_pin);
-            return;
-        }
-
-        int commaIndex = message.indexOf(',');
-        if (commaIndex > 0)
-        {
-            long freq     = message.substring(0, commaIndex).toInt();
-            long duration = message.substring(commaIndex + 1).toInt();
-            if (freq > 0 && duration > 0)
-            {
-                tone(_pin, freq, duration);
-            }
-        }
-    }
+    void parseMessage(const String &message) override;
 
 private:
     int _pin;

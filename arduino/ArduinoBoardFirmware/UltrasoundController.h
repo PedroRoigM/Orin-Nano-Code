@@ -4,84 +4,25 @@
 #include "GeneralController.h"
 #include "PinDeclaration.h"
 
-// ---------------------------------------------------------------------------
-// UltrasoundController
 // Observer for "US" messages. Also actively measures and reports distance.
-// Message format: "PING"  => triggers a single measurement
-// ---------------------------------------------------------------------------
+// Message format: "PING" => triggers a single measurement
 class UltrasoundController : public GeneralController
 {
 public:
-    UltrasoundController(const String &id, int pinTrig, int pinEcho)
-        : GeneralController(id), _pinTrig(pinTrig), _pinEcho(pinEcho)
-    {
-        pinMode(_pinTrig, OUTPUT);
-        pinMode(_pinEcho, INPUT);
-        digitalWrite(_pinTrig, LOW);
-    }
+    UltrasoundController(const String &id, int pinTrig, int pinEcho);
 
-    // -----------------------------------------------------------------------
-    // sanityTest() — fires one ranging pulse and reports distance to Serial.
-    //   PASS  = echo received (distance > 0)
-    //   FAIL  = no echo within timeout (sensor may be disconnected)
-    // -----------------------------------------------------------------------
-    void sanityTest()
-    {
-        Serial.print(F("[SanityTest] "));
-        Serial.print(observerId);
-        Serial.print(F(" ... "));
-
-        long distanceCm = readDistanceCm();
-
-        if (distanceCm > 0)
-        {
-            Serial.print(F("PASS ("));
-            Serial.print(distanceCm);
-            Serial.println(F(" cm)"));
-        }
-        else
-        {
-            Serial.println(F("FAIL (no echo — check wiring)"));
-        }
-    }
-
-    // Call periodically from loop() to send distance readings to the PC
-    void measure()
-    {
-        long distanceCm = readDistanceCm();
-        sendToSerial(String(distanceCm));
-    }
-
-    void Update(const String &message) override
-    {
-        parseMessage(message);
-    }
+    void sanityTest();
+    void measure();
+    void Update(const String &message) override;
 
 protected:
-    void parseMessage(const String &message) override
-    {
-        if (message == "PING")
-        {
-            measure();
-        }
-    }
+    void parseMessage(const String &message) override;
 
 private:
     int _pinTrig;
     int _pinEcho;
 
-    long readDistanceCm()
-    {
-        digitalWrite(_pinTrig, LOW);
-        delayMicroseconds(2);
-        digitalWrite(_pinTrig, HIGH);
-        delayMicroseconds(10);
-        digitalWrite(_pinTrig, LOW);
-
-        // Timeout at 30 000 µs ≈ 5 m range
-        long duration = pulseIn(_pinEcho, HIGH, 30000UL);
-        return duration / 58;
-    }
+    long readDistanceCm();
 };
 
 #endif // ULTRASOUND_CONTROLLER_H
