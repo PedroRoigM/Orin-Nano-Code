@@ -1,19 +1,17 @@
-// BuzzerController.ino
-// Controls a passive buzzer. Registered as an observer for "BUZZ" messages.
-// Expected message format: "<frequency>,<duration_ms>"
-//   e.g.  "1000,500"  => 1000 Hz for 500 ms
-//         "OFF"       => stop any ongoing tone
+#ifndef BUZZER_CONTROLLER_H
+#define BUZZER_CONTROLLER_H
 
-#include "ObserverPatternDelcaration.h"
+#include "GeneralController.h"
 #include "PinDeclaration.h"
 
+// ---------------------------------------------------------------------------
+// BuzzerController
+// Observer for "BUZZ" messages.
+// Message format: "<freq>,<duration_ms>"  or  "OFF"
+// ---------------------------------------------------------------------------
 class BuzzerController : public GeneralController
 {
 public:
-    /**
-     * @param id  Human-readable name (e.g. "BUZZER_1")
-     * @param pin Digital pin connected to the buzzer
-     */
     BuzzerController(const String &id, int pin)
         : GeneralController(id), _pin(pin)
     {
@@ -34,7 +32,6 @@ protected:
             return;
         }
 
-        // Parse "<frequency>,<duration>" format
         int commaIndex = message.indexOf(',');
         if (commaIndex > 0)
         {
@@ -45,9 +42,10 @@ protected:
                 tone(_pin, freq, duration);
             }
         }
-        // Ignore malformed messages silently
     }
 
 private:
     int _pin;
 };
+
+#endif // BUZZER_CONTROLLER_H

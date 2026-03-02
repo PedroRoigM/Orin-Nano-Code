@@ -1,23 +1,18 @@
-// LcdController.ino
-// Controls an LCD display. Registered as an observer for "LCD" messages.
-// Expected message format: any string to display on the LCD.
-//
-// NOTE: Requires the LiquidCrystal_I2C library.
-// Install via Arduino Library Manager: "LiquidCrystal I2C" by Frank de Brabander
+#ifndef LCD_CONTROLLER_H
+#define LCD_CONTROLLER_H
 
-#include "ObserverPatternDelcaration.h"
+#include "GeneralController.h"
 #include "PinDeclaration.h"
 #include <LiquidCrystal_I2C.h>
 
+// ---------------------------------------------------------------------------
+// LcdController
+// Observer for "LCD" messages. Any string payload is displayed on the LCD.
+// Requires: LiquidCrystal_I2C library (Library Manager)
+// ---------------------------------------------------------------------------
 class LcdController : public GeneralController
 {
 public:
-    /**
-     * @param id      Human-readable name (e.g. "LCD_1")
-     * @param address I2C address of the LCD backpack (default 0x27)
-     * @param cols    Number of LCD columns
-     * @param rows    Number of LCD rows
-     */
     LcdController(const String &id, uint8_t address, uint8_t cols, uint8_t rows)
         : GeneralController(id), _lcd(address, cols, rows)
     {
@@ -42,3 +37,5 @@ protected:
 private:
     LiquidCrystal_I2C _lcd;
 };
+
+#endif // LCD_CONTROLLER_H

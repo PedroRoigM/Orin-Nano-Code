@@ -1,25 +1,17 @@
-// MotorController.ino
-// Controls a DC motor via an H-bridge (e.g. L298N).
-// Registered as an observer for "MOT" messages.
-//
-// Expected message format: "<direction>,<speed>"
-//   direction: "FWD", "REV", or "STOP"
-//   speed:     0-255 (PWM value for enable pin)
-//   e.g.  "FWD,200"  => forward at speed 200
-//         "STOP,0"   => stop
+#ifndef MOTOR_CONTROLLER_H
+#define MOTOR_CONTROLLER_H
 
-#include "ObserverPatternDelcaration.h"
+#include "GeneralController.h"
 #include "PinDeclaration.h"
 
+// ---------------------------------------------------------------------------
+// MotorController
+// Observer for "MOT" messages.
+// Message format: "<FWD|REV|STOP>,<speed 0-255>"
+// ---------------------------------------------------------------------------
 class MotorController : public GeneralController
 {
 public:
-    /**
-     * @param id    Human-readable name (e.g. "MOTOR_1")
-     * @param pinIn1 H-bridge IN1 pin
-     * @param pinIn2 H-bridge IN2 pin
-     * @param pinEn  H-bridge Enable/PWM pin
-     */
     MotorController(const String &id, int pinIn1, int pinIn2, int pinEn)
         : GeneralController(id), _pinIn1(pinIn1), _pinIn2(pinIn2), _pinEn(pinEn)
     {
@@ -40,21 +32,17 @@ protected:
         int commaIndex = message.indexOf(',');
         if (commaIndex < 0)
         {
-            // No comma — treat whole string as direction, default speed 0
             applyDirection(message, 0);
             return;
         }
 
         String direction = message.substring(0, commaIndex);
-        int speed        = message.substring(commaIndex + 1).toInt();
-        speed            = constrain(speed, 0, 255);
+        int speed        = constrain(message.substring(commaIndex + 1).toInt(), 0, 255);
         applyDirection(direction, speed);
     }
 
 private:
-    int _pinIn1;
-    int _pinIn2;
-    int _pinEn;
+    int _pinIn1, _pinIn2, _pinEn;
 
     void applyDirection(const String &direction, int speed)
     {
@@ -70,7 +58,7 @@ private:
             digitalWrite(_pinIn2, HIGH);
             analogWrite(_pinEn, speed);
         }
-        else // "STOP" or unknown
+        else
         {
             stop();
         }
@@ -83,3 +71,5 @@ private:
         analogWrite(_pinEn, 0);
     }
 };
+
+#endif // MOTOR_CONTROLLER_H

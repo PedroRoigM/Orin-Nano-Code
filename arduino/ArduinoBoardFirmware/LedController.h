@@ -1,17 +1,16 @@
-// LedController.ino
-// Controls LED outputs. Registered as an observer for "LED" messages.
-// Expected message format: "ON", "OFF", or "BLINK"
+#ifndef LED_CONTROLLER_H
+#define LED_CONTROLLER_H
 
-#include "ObserverPatternDelcaration.h"
+#include "GeneralController.h"
 #include "PinDeclaration.h"
 
+// ---------------------------------------------------------------------------
+// LedController
+// Observer for "LED" messages. Messages: "ON", "OFF", "BLINK"
+// ---------------------------------------------------------------------------
 class LedController : public GeneralController
 {
 public:
-    /**
-     * @param id     Human-readable name (e.g. "LED_1")
-     * @param pin    Digital output pin for this LED
-     */
     LedController(const String &id, int pin)
         : GeneralController(id), _pin(pin)
     {
@@ -37,14 +36,12 @@ protected:
         }
         else if (message == "BLINK")
         {
-            digitalWrite(_pin, !digitalRead(_pin)); // toggle
-        }
-        else
-        {
-            // Unknown command — ignore silently
+            digitalWrite(_pin, !digitalRead(_pin));
         }
     }
 
 private:
     int _pin;
 };
+
+#endif // LED_CONTROLLER_H
