@@ -37,7 +37,7 @@ Coordinator coordinator;
 void setup()
 {
     Serial.begin(9600);
-    while (!Serial) { /* wait for USB serial on Leonardo/Micro */ }
+    while (!Serial) { };
 
     coordinator.Attach(&led1,    "LED");
     coordinator.Attach(&led2,    "LED");
@@ -52,6 +52,27 @@ void setup()
     coordinator.Attach(&us1,     "US");
 
     coordinator.printAllObservers();
+
+    // -----------------------------------------------------------------------
+    // Sanity tests — exercise each controller once and report to Serial
+    // -----------------------------------------------------------------------
+    Serial.println(F("========== SANITY TESTS =========="));
+
+    led1.sanityTest();
+    led2.sanityTest();
+    led3.sanityTest();
+
+    lcd1.sanityTest();
+    lcd2.sanityTest();
+    lcd3.sanityTest();
+
+    buzzer1.sanityTest();
+
+    motor1.sanityTest();
+
+    us1.sanityTest();
+
+    Serial.println(F("========== TESTS COMPLETE =========="));
     Serial.println(F("[Setup] Ready. Waiting for commands..."));
 }
 

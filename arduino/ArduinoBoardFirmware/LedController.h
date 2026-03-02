@@ -18,6 +18,26 @@ public:
         digitalWrite(_pin, LOW);
     }
 
+    // -----------------------------------------------------------------------
+    // sanityTest() — blinks the LED twice and reports result over Serial.
+    // -----------------------------------------------------------------------
+    void sanityTest()
+    {
+        Serial.print(F("[SanityTest] "));
+        Serial.print(observerId);
+        Serial.print(F(" ... "));
+
+        for (int i = 0; i < 2; i++)
+        {
+            digitalWrite(_pin, HIGH);
+            delay(150);
+            digitalWrite(_pin, LOW);
+            delay(150);
+        }
+
+        Serial.println(F("PASS"));
+    }
+
     void Update(const String &message) override
     {
         parseMessage(message);

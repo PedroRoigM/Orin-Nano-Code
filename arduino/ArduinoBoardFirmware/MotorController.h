@@ -21,6 +21,25 @@ public:
         stop();
     }
 
+    // -----------------------------------------------------------------------
+    // sanityTest() — runs the motor briefly forward then stops, reports to Serial.
+    // -----------------------------------------------------------------------
+    void sanityTest()
+    {
+        Serial.print(F("[SanityTest] "));
+        Serial.print(observerId);
+        Serial.print(F(" ... "));
+
+        // Forward at low speed for 500 ms
+        digitalWrite(_pinIn1, HIGH);
+        digitalWrite(_pinIn2, LOW);
+        analogWrite(_pinEn, 80);
+        delay(500);
+        stop();
+
+        Serial.println(F("PASS"));
+    }
+
     void Update(const String &message) override
     {
         parseMessage(message);

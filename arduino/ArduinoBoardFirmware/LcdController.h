@@ -21,6 +21,24 @@ public:
         _lcd.clear();
     }
 
+    // -----------------------------------------------------------------------
+    // sanityTest() — writes a test string to the LCD and reports to Serial.
+    // -----------------------------------------------------------------------
+    void sanityTest()
+    {
+        Serial.print(F("[SanityTest] "));
+        Serial.print(observerId);
+        Serial.print(F(" ... "));
+
+        _lcd.clear();
+        _lcd.setCursor(0, 0);
+        _lcd.print(F("Sanity Test OK"));
+        delay(1000);
+        _lcd.clear();
+
+        Serial.println(F("PASS"));
+    }
+
     void Update(const String &message) override
     {
         parseMessage(message);

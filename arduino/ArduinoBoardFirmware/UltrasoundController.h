@@ -20,6 +20,31 @@ public:
         digitalWrite(_pinTrig, LOW);
     }
 
+    // -----------------------------------------------------------------------
+    // sanityTest() — fires one ranging pulse and reports distance to Serial.
+    //   PASS  = echo received (distance > 0)
+    //   FAIL  = no echo within timeout (sensor may be disconnected)
+    // -----------------------------------------------------------------------
+    void sanityTest()
+    {
+        Serial.print(F("[SanityTest] "));
+        Serial.print(observerId);
+        Serial.print(F(" ... "));
+
+        long distanceCm = readDistanceCm();
+
+        if (distanceCm > 0)
+        {
+            Serial.print(F("PASS ("));
+            Serial.print(distanceCm);
+            Serial.println(F(" cm)"));
+        }
+        else
+        {
+            Serial.println(F("FAIL (no echo — check wiring)"));
+        }
+    }
+
     // Call periodically from loop() to send distance readings to the PC
     void measure()
     {

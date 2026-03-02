@@ -18,6 +18,21 @@ public:
         pinMode(_pin, OUTPUT);
     }
 
+    // -----------------------------------------------------------------------
+    // sanityTest() — plays a short beep and reports to Serial.
+    // -----------------------------------------------------------------------
+    void sanityTest()
+    {
+        Serial.print(F("[SanityTest] "));
+        Serial.print(observerId);
+        Serial.print(F(" ... "));
+
+        tone(_pin, 1000, 300); // 1 kHz for 300 ms
+        delay(400);            // wait for tone to finish
+
+        Serial.println(F("PASS"));
+    }
+
     void Update(const String &message) override
     {
         parseMessage(message);
