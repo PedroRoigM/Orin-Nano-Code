@@ -1,10 +1,10 @@
-from core.controllers.port import Port
-from core.controllers.commandValues import CommandValues
-from core.controllers.nodeValues import NodeValues
+from controllers.port import Port
+from controllers.commandValues import CommandValues
+from controllers.nodeValues import NodeValues
 
 class HoloController:
-	def __init__(self, port_name=None):
-		self.port = Port(port_name)
+	def __init__(self, port=None, port_name=None):
+		self.port = port if port is not None else Port(port_name)
 
 	def _isParameterValid(self, parameter:int):
 		if not (1 <= parameter <= 4):

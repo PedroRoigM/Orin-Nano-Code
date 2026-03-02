@@ -1,10 +1,10 @@
-from core.controllers.commandValues import CommandValues
-from core.controllers.nodeValues import NodeValues
-from core.controllers.port import Port
+from controllers.commandValues import CommandValues
+from controllers.nodeValues import NodeValues
+from controllers.port import Port
 
 class DataPanelController:
-    def __init__(self, port_name =None):
-        self.port = Port(port_name=port_name)
+    def __init__(self, port=None, port_name=None):
+        self.port = port if port is not None else Port(port_name=port_name)
 
     def _isColorValid(self, color):
         if not (0 <= color <= 255):

@@ -1,7 +1,7 @@
-from core.controllers.port import Port
+from controllers.port import Port
 from enum import IntEnum
-from core.controllers.commandValues import CommandValues
-from core.controllers.nodeValues import NodeValues
+from controllers.commandValues import CommandValues
+from controllers.nodeValues import NodeValues
 
 class AudioController:
 
@@ -46,8 +46,8 @@ class AudioController:
 
 	_EXCLUDE = {"valence", "arousal", "categoria_russell"}
 
-	def __init__(self, port_name='/dev/ttyACM1'):
-		self.port = Port(port_name)
+	def __init__(self, port=None, port_name='/dev/ttyACM1'):
+		self.port = port if port is not None else Port(port_name)
 		self.droid_mode = 0
 
 	def _isFolderValid(self, folder: int):
