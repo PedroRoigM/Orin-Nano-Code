@@ -37,7 +37,6 @@ Coordinator coordinator;
 void setup()
 {
     Serial.begin(9600);
-    while (!Serial) { };
 
     coordinator.Attach(&led1,    "LED");
     coordinator.Attach(&led2,    "LED");
@@ -81,29 +80,8 @@ void setup()
 // ---------------------------------------------------------------------------
 void loop()
 {
-    
-    // -----------------------------------------------------------------------
-    // Sanity tests — exercise each controller once and report to Serial
-    // -----------------------------------------------------------------------
-    Serial.println(F("========== SANITY TESTS =========="));
-
-    led1.sanityTest();
-    led2.sanityTest();
-    led3.sanityTest();
-
-    lcd1.sanityTest();
-    lcd2.sanityTest();
-    lcd3.sanityTest();
-
-    buzzer1.sanityTest();
-
-    motor1.sanityTest();
-
-    us1.sanityTest();
-
-    Serial.println(F("========== TESTS COMPLETE =========="));
-    Serial.println(F("[Setup] Ready. Waiting for commands..."));
-    
+  
+    Serial.println(F("========== LOOP =========="));
     coordinator.readAndRoute();
 
     // Periodic ultrasound measurement every 500 ms
