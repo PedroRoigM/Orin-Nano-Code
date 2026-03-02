@@ -12,6 +12,7 @@ class LcdController : public GeneralController
 public:
     LcdController(const String &id, uint8_t address, uint8_t cols, uint8_t rows);
 
+    void begin();
     void sanityTest();
     void Update(const String &message) override;
 

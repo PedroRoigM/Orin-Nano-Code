@@ -28,6 +28,7 @@ void BuzzerController::parseMessage(const String &message)
     if (message == "OFF")
     {
         noTone(_pin);
+        sendToSerial(F("STATE:OFF"));
         return;
     }
 
@@ -39,6 +40,7 @@ void BuzzerController::parseMessage(const String &message)
         if (freq > 0 && duration > 0)
         {
             tone(_pin, freq, duration);
+            sendToSerial("TONE:" + String(freq) + "," + String(duration));
         }
     }
 }

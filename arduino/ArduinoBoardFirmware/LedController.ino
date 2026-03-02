@@ -34,13 +34,16 @@ void LedController::parseMessage(const String &message)
     if (message == "ON")
     {
         digitalWrite(_pin, HIGH);
+        sendToSerial(F("STATE:ON"));
     }
     else if (message == "OFF")
     {
         digitalWrite(_pin, LOW);
+        sendToSerial(F("STATE:OFF"));
     }
     else if (message == "BLINK")
     {
         digitalWrite(_pin, !digitalRead(_pin));
+        sendToSerial(F("STATE:BLINK"));
     }
 }

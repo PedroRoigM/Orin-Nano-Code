@@ -22,9 +22,9 @@ LcdController lcd1("LCD_1", LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
 LcdController lcd2("LCD_2", LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
 LcdController lcd3("LCD_3", LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
 
-BuzzerController    buzzer1("BUZZ_1", PIN_BUZZER);
-MotorController     motor1("MOT_1",  PIN_MOTOR_1_IN1, PIN_MOTOR_1_IN2, PIN_MOTOR_1_EN);
-UltrasoundController us1("US_1",    PIN_ULTRASOUND_TRIG, PIN_ULTRASOUND_ECHO);
+BuzzerController buzzer1("BUZZ_1", PIN_BUZZER);
+MotorController motor1("MOT_1", PIN_MOTOR_1_IN1, PIN_MOTOR_1_IN2, PIN_MOTOR_1_EN);
+UltrasoundController us1("US_1", PIN_ULTRASOUND_TRIG, PIN_ULTRASOUND_ECHO);
 
 // ---------------------------------------------------------------------------
 // Coordinator
@@ -37,25 +37,26 @@ Coordinator coordinator;
 void setup()
 {
     Serial.begin(9600);
+    Wire.begin();
 
-    coordinator.Attach(&led1,    "LED");
-    coordinator.Attach(&led2,    "LED");
-    coordinator.Attach(&led3,    "LED");
+    coordinator.Attach(&led1, "LED");
+    coordinator.Attach(&led2, "LED");
+    coordinator.Attach(&led3, "LED");
 
-    coordinator.Attach(&lcd1,    "LCD");
-    coordinator.Attach(&lcd2,    "LCD");
-    coordinator.Attach(&lcd3,    "LCD");
+    coordinator.Attach(&lcd1, "LCD");
+    coordinator.Attach(&lcd2, "LCD");
+    coordinator.Attach(&lcd3, "LCD");
 
     coordinator.Attach(&buzzer1, "BUZZ");
-    coordinator.Attach(&motor1,  "MOT");
-    coordinator.Attach(&us1,     "US");
+    coordinator.Attach(&motor1, "MOT");
+    coordinator.Attach(&us1, "US");
 
     coordinator.printAllObservers();
 
     // -----------------------------------------------------------------------
     // Sanity tests — exercise each controller once and report to Serial
     // -----------------------------------------------------------------------
-    Serial.println(F("========== SANITY TESTS =========="));
+    Serial.println("========== SANITY TESTS ==========");
 
     led1.sanityTest();
     led2.sanityTest();
@@ -71,8 +72,8 @@ void setup()
 
     us1.sanityTest();
 
-    Serial.println(F("========== TESTS COMPLETE =========="));
-    Serial.println(F("[Setup] Ready. Waiting for commands..."));
+    Serial.println("========== TESTS COMPLETE ==========");
+    Serial.println("[Setup] Ready. Waiting for commands...");
 }
 
 // ---------------------------------------------------------------------------
@@ -80,8 +81,7 @@ void setup()
 // ---------------------------------------------------------------------------
 void loop()
 {
-  
-    Serial.println(F("========== LOOP =========="));
+
     coordinator.readAndRoute();
 
     // Periodic ultrasound measurement every 500 ms
