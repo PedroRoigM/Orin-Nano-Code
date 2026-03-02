@@ -1,13 +1,14 @@
 from enum import IntEnum
-from port import Port
-from commandValues import CommandValues
+from controllers.port import Port
+from controllers.commandValues import CommandValues
+
 
 class NodeValues(IntEnum):
 	SERVO = 1
 
 class ServoController:
-	def __init__(self, port_name='/dev/ttyACM0'):
-		self.port = Port(port_name)
+	def __init__(self, port=None, port_name='/dev/ttyACM0'):
+		self.port = port if port is not None else Port(port_name)
 
 	def _isPositionValid(self, pos: int):
 		if not (0 <= pos <= 255):

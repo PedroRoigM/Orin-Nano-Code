@@ -1,7 +1,7 @@
-from port import Port
+from controllers.port import Port
 from enum import IntEnum
-from nodeValues import NodeValues
-from commandValues import CommandValues
+from controllers.nodeValues import NodeValues
+from controllers.commandValues import CommandValues
 
 class DisplayValues(IntEnum):
 	ALL_TEECES = 1
@@ -25,8 +25,8 @@ class ProgramMode(IntEnum):
 	BARCODE = 56
 
 class TeeceController:
-	def __init__(self, port_name='/dev/ttyAMC1'):
-		self.port = Port(port_name)
+	def __init__(self, port=None, port_name='/dev/ttyAMC1'):
+		self.port = port if port is not None else Port(port_name)
 	def _isColorValid(self, color:int):
 		if not (0 <= color <= 255):
 			raise ValueError(f"Color value not in valid range [0, 255]")
