@@ -1,36 +1,84 @@
+"""
+ultrasonic_observer.py
+======================
+Listener serial bidireccional para el nuevo firmware ArduinoBoardFirmware.
+
+Lee TODAS las líneas que el Arduino envía y las despacha según su prefijo:
+
+  US_<id>:<cm>           → lectura ultrasónica  (automática cada 500 ms)
+  LED_<id>:STATE:<val>   → ACK de LED           (ignorado / logging)
+  LCD_<id>:TEXT:<val>    → ACK de LCD           (ignorado / logging)
+  MOT_<id>:DIR:<val>     → ACK de motor         (ignorado / logging)
+  BUZZ_<id>:<val>        → ACK de buzzer        (ignorado / logging)
+  EYES_ACK:<val>         → ACK de ojos          (ignorado / logging)
+  GAZE_ACK:<val>         → ACK de mirada        (ignorado / logging)
+  Otras líneas           → mensajes de debug / sanity test (logging)
+
+API pública (igual que antes para no romper tensor_rt.py):
+  .is_front_blocked  → True si la distancia < threshold_cm
+  .is_back_blocked   → siempre False (el nuevo firmware tiene 1 sensor)
+  .is_blocked        → alias de is_front_blocked
+  .front_cm          → distancia del sensor en cm (-1 = sin dato)
+  .back_cm           → siempre -1.0 (sin sensor trasero)
+  .distance_cm       → alias de front_cm
+
+Nuevo en este firmware:
+  .ping()            → envía "US:PING\n" para forzar lectura inmediata
+
+El objeto serial NO se cierra al detenerse (es de uso compartido).
+"""
+
 import serial
 import threading
+import time
+from typing import Optional
 
 
 class UltrasonicObserver:
     """
-    Escucha un Arduino a través de un objeto serial ya abierto y compartido.
-    El Arduino envía las lecturas de dos sensores ultrasónicos en una sola
-    línea CSV por iteración de su loop():
-
-        "front_cm,back_cm\n"    p.ej.  "12.5,8.3\n"
-
-    Cuando la distancia de un sensor cae por debajo de `threshold_cm` se
-    activa la bandera de bloqueo correspondiente. El código de movimiento
-    debe consultar `is_front_blocked` e `is_back_blocked` antes de enviar
-    comandos de avance o retroceso respectivamente.
-
-    Se ejecuta en un hilo demonio para que muera automáticamente cuando el
-    programa principal termina. El objeto serial NO se cierra al detenerse,
-    ya que es de uso compartido.
+    Hilo daemon que escucha el puerto serial del nuevo firmware y:
+      · Actualiza la distancia del sensor ultrasónico.
+      · Activa/desactiva la bandera de bloqueo para la seguridad del movimiento.
+      · Despacha los ACKs del resto de controladores (LED, LCD, MOT, BUZZ).
     """
 
-    def __init__(self, ser: serial.Serial, threshold_cm: float = 10.0):
-        self._ser         = ser
-        self.threshold_cm = threshold_cm
+    def __init__(
+        self,
+        ser: serial.Serial,
+        threshold_cm: float = 10.0,
+        write_port=None,          # SharedPort opcional para enviar PING
+        verbose_acks: bool = False,
+        verbose_us:   bool = True,
+    ):
+        self._ser           = ser
+        self.threshold_cm   = threshold_cm
+        self._write_port    = write_port   # SharedPort para send_line("US:PING")
+        self._verbose_acks  = verbose_acks
+        self._verbose_us    = verbose_us
 
-        self._front_blocked = threading.Event()  # delantero muy cerca del borde
-        self._back_blocked  = threading.Event()  # trasero muy cerca del borde
-        self._stop          = threading.Event()  # señal para detener el hilo
-        self._thread        = threading.Thread(target=self._run, name="UltrasonicObserver", daemon=True)
+        # Estado del sensor ultrasónico (1 sensor en el nuevo firmware)
+        self._distance_cm: float  = -1.0
+        self._blocked             = threading.Event()
+        self._stop                = threading.Event()
 
-        self._front_cm: float = -1.0   # última lectura del sensor delantero (-1 = sin dato)
-        self._back_cm:  float = -1.0   # última lectura del sensor trasero
+        # Callbacks opcionales: se llaman cuando llega un ACK de otro tipo
+        # Uso: observer.on_ack["MOT"] = lambda controller_id, payload: ...
+        self.on_ack: dict[str, Optional[callable]] = {
+            "LED":  None,
+            "LCD":  None,
+            "MOT":  None,
+            "BUZZ": None,
+            "EYES": None,
+            "GAZE": None,
+        }
+
+        self._thread = threading.Thread(
+            target=self._run,
+            name="ArduinoListener",
+            daemon=True,
+        )
+
+    # ── Ciclo de vida ─────────────────────────────────────────────────────────
 
     def start(self) -> None:
         self._thread.start()
@@ -38,43 +86,58 @@ class UltrasonicObserver:
     def stop(self) -> None:
         self._stop.set()
 
+    # ── API de seguridad (igual que antes) ────────────────────────────────────
+
     @property
     def is_front_blocked(self) -> bool:
-        """Verdadero cuando el sensor delantero detecta el borde de la mesa."""
-        return self._front_blocked.is_set()
+        """Verdadero cuando el sensor detecta un obstáculo muy cercano."""
+        return self._blocked.is_set()
 
     @property
     def is_back_blocked(self) -> bool:
-        """Verdadero cuando el sensor trasero detecta el borde de la mesa."""
-        return self._back_blocked.is_set()
+        """Siempre False — el nuevo firmware tiene UN solo sensor."""
+        return False
 
     @property
     def is_blocked(self) -> bool:
-        """Verdadero cuando cualquiera de los dos sensores está bloqueado."""
-        return self._front_blocked.is_set() or self._back_blocked.is_set()
+        """Verdadero cuando el sensor (delantero) está bloqueado."""
+        return self._blocked.is_set()
 
     @property
     def front_cm(self) -> float:
-        """Última distancia leída por el sensor delantero en cm. -1 si no hay dato."""
-        return self._front_cm
+        """Distancia del sensor en cm. -1 si no hay dato todavía."""
+        return self._distance_cm
 
     @property
     def back_cm(self) -> float:
-        """Última distancia leída por el sensor trasero en cm. -1 si no hay dato."""
-        return self._back_cm
+        """Siempre -1.0 — sin sensor trasero en el nuevo firmware."""
+        return -1.0
 
-    def _update_sensor(self, event: threading.Event, distance_cm: float, label: str) -> None:
-        if distance_cm < self.threshold_cm:
-            if not event.is_set():
-                print(f"[Ultrasonic] {label} BLOCKED — {distance_cm:.1f} cm < {self.threshold_cm} cm")
-            event.set()
+    @property
+    def distance_cm(self) -> float:
+        """Alias de front_cm."""
+        return self._distance_cm
+
+    # ── Acción: PING ──────────────────────────────────────────────────────────
+
+    def ping(self) -> None:
+        """
+        Envía "US:PING\n" al Arduino para solicitar una lectura inmediata.
+        El Arduino responde con "US_1:<cm>\n".
+        Solo funciona si write_port fue proporcionado al construir.
+        """
+        if self._write_port is not None:
+            self._write_port.send_line("US:PING")
         else:
-            if event.is_set():
-                print(f"[Ultrasonic] {label} clear — {distance_cm:.1f} cm")
-            event.clear()
+            print("[Ultrasonic] ping() ignorado — write_port no configurado")
+
+    # ── Hilo de escucha ───────────────────────────────────────────────────────
 
     def _run(self) -> None:
-        print(f"[Ultrasonic] Observer started (threshold: {self.threshold_cm} cm, sensors: front + back)")
+        print(
+            f"[Ultrasonic] Listener serial iniciado "
+            f"(umbral: {self.threshold_cm} cm)"
+        )
         try:
             while not self._stop.is_set():
                 raw = self._ser.readline()
@@ -85,22 +148,73 @@ class UltrasonicObserver:
                 if not line:
                     continue
 
-                parts = line.split(",")
-                if len(parts) != 2:
-                    continue  # ignorar líneas mal formadas o mensajes de arranque
-
-                try:
-                    front_cm = float(parts[0])
-                    back_cm  = float(parts[1])
-                except ValueError:
-                    continue
-
-                self._front_cm = front_cm
-                self._back_cm  = back_cm
-                self._update_sensor(self._front_blocked, front_cm, "FRONT")
-                self._update_sensor(self._back_blocked,  back_cm,  "BACK")
+                self._dispatch(line)
 
         except Exception as exc:
-            print(f"[Ultrasonic] Error in observer thread: {exc}")
+            print(f"[Ultrasonic] Error en hilo listener: {exc}")
         finally:
-            print("[Ultrasonic] Observer stopped.")
+            print("[Ultrasonic] Listener serial detenido.")
+
+    def _dispatch(self, line: str) -> None:
+        """Despacha una línea recibida del Arduino según su prefijo."""
+        colon = line.find(':')
+        if colon <= 0:
+            # Línea sin formato TIPO:VALOR (sanity test, debug, etc.)
+            if self._verbose_acks:
+                print(f"[Arduino←] {line}")
+            return
+
+        controller_id = line[:colon]       # e.g.  "US_1", "LED_2", "MOT_1"
+        payload       = line[colon + 1:]   # e.g.  "42", "STATE:ON", "DIR:FWD,SPD:80"
+
+        # ── Sensor ultrasónico ────────────────────────────────────────────────
+        if controller_id.startswith("US"):
+            self._handle_us(controller_id, payload)
+            return
+
+        # ── ACKs de otros controladores ───────────────────────────────────────
+        for prefix, cb_key in (
+            ("LED",  "LED"),
+            ("LCD",  "LCD"),
+            ("MOT",  "MOT"),
+            ("BUZZ", "BUZZ"),
+            ("EYES", "EYES"),
+            ("GAZE", "GAZE"),
+        ):
+            if controller_id.startswith(prefix):
+                if self._verbose_acks:
+                    print(f"[Arduino←] {line}")
+                cb = self.on_ack.get(cb_key)
+                if cb is not None:
+                    try:
+                        cb(controller_id, payload)
+                    except Exception as e:
+                        print(f"[Ultrasonic] Error en callback {cb_key}: {e}")
+                return
+
+        # Línea desconocida
+        if self._verbose_acks:
+            print(f"[Arduino←] {line}")
+
+    def _handle_us(self, controller_id: str, payload: str) -> None:
+        """Procesa una lectura ultrasónica: 'US_1:<cm>'."""
+        try:
+            cm = float(payload)
+        except ValueError:
+            return
+
+        self._distance_cm = cm
+
+        # Actualizar bandera de bloqueo
+        was_blocked = self._blocked.is_set()
+        if cm > 0 and cm < self.threshold_cm:
+            if not was_blocked and self._verbose_us:
+                print(
+                    f"[Ultrasonic] {controller_id} BLOQUEADO — "
+                    f"{cm:.1f} cm < {self.threshold_cm} cm"
+                )
+            self._blocked.set()
+        else:
+            if was_blocked and self._verbose_us:
+                print(f"[Ultrasonic] {controller_id} despejado — {cm:.1f} cm")
+            self._blocked.clear()

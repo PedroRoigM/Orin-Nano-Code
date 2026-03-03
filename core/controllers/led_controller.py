@@ -1,76 +1,72 @@
-from controllers.commandValues import CommandValues
-from controllers.nodeValues import NodeValues
+"""
+led_controller.py
+=================
+Controla los LEDs conectados al Arduino (nuevo firmware ArduinoBoardFirmware).
+
+Protocolo texto (newline-terminado):
+  LED:ON\n    → enciende TODOS los LEDs registrados (LED_1, LED_2, LED_3)
+  LED:OFF\n   → apaga todos
+  LED:BLINK\n → invierte el estado de todos (toggle)
+
+El Coordinator del Arduino hace broadcast a todos los LedController
+registrados bajo el tipo "LED", por lo que el comando afecta a todos
+simultáneamente. Para control individual de LEDs, extender el firmware
+con tipos separados (LED_1, LED_2…).
+
+Respuesta del Arduino (ignorada en Python, solo logging si verbose=True):
+  LED_1:STATE:ON
+  LED_2:STATE:OFF
+  LED_3:STATE:BLINK
+"""
 
 
 class LedController:
-    """
-    Controla tiras o grupos de LEDs RGB conectados al Arduino.
 
-    Protocolo:
-        set_color      → [ CMD_LED_COLOR,      NODE_LED, target, r, g, b ]
-        set_brightness → [ CMD_LED_BRIGHTNESS, NODE_LED, target, brightness ]
-        set_pattern    → [ CMD_LED_PATTERN,    NODE_LED, target, pattern_id ]
+    def __init__(self, port, verbose: bool = False):
+        self._port    = port
+        self._verbose = verbose
 
-    `target` identifica el grupo de LEDs (0 = todos, 1..N = grupo específico).
+    # ── API pública ──────────────────────────────────────────────────────────
 
-    Patrones disponibles (definir en el Arduino):
-        0 = apagado
-        1 = color fijo
-        2 = parpadeo
-        3 = respiración
-        4 = arco iris
-        5 = pulso al ritmo
-    """
+    def on(self) -> None:
+        """Enciende todos los LEDs."""
+        self._send("ON")
 
-    def __init__(self, port):
-        self._port = port
+    def off(self) -> None:
+        """Apaga todos los LEDs."""
+        self._send("OFF")
 
-    # ------------------------------------------------------------------
-    # Validation
-    # ------------------------------------------------------------------
+    def blink(self) -> None:
+        """Invierte el estado de todos los LEDs (toggle)."""
+        self._send("BLINK")
 
-    def _check_color(self, value: int, name: str = "color") -> None:
-        if not (0 <= value <= 255):
-            raise ValueError(f"LED {name} must be 0-255, got {value}")
+    # ── Métodos de conveniencia para emociones ───────────────────────────────
 
-    def _check_brightness(self, value: int) -> None:
-        if not (0 <= value <= 255):
-            raise ValueError(f"LED brightness must be 0-255, got {value}")
+    def flash_alert(self) -> None:
+        """Parpadeo de alerta (usado cuando sensor detecta obstáculo)."""
+        self._send("BLINK")
 
-    def _check_pattern(self, value: int) -> None:
-        if not (0 <= value <= 5):
-            raise ValueError(f"LED pattern must be 0-5, got {value}")
+    def set_emotion(self, emotion: str) -> None:
+        """
+        Enciende/apaga LEDs según la emoción.
+        Emociones positivas → ON, negativas → BLINK, neutral → OFF.
+        """
+        _BLINK   = {"anger", "fear", "disgust"}
+        _OFF     = {"neutral", "sadness", "contempt"}
+        if emotion in _BLINK:
+            self.blink()
+        elif emotion in _OFF:
+            self.off()
+        else:
+            self.on()
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
+    # ── Interno ──────────────────────────────────────────────────────────────
 
-    def set_color(self, r: int, g: int, b: int, target: int = 0) -> None:
-        """Establece el color RGB de un grupo de LEDs."""
+    def _send(self, payload: str) -> None:
         try:
-            self._check_color(r, "red")
-            self._check_color(g, "green")
-            self._check_color(b, "blue")
-            self._port.send_data([CommandValues.LED_COLOR, NodeValues.LED, target, r, g, b])
+            line = f"LED:{payload}"
+            if self._verbose:
+                print(f"[LED] → {line}")
+            self._port.send_line(line)
         except Exception as e:
             print(f"[LED] ERROR: {e}")
-
-    def set_brightness(self, brightness: int, target: int = 0) -> None:
-        """Establece el brillo global (0 = apagado, 255 = máximo)."""
-        try:
-            self._check_brightness(brightness)
-            self._port.send_data([CommandValues.LED_BRIGHTNESS, NodeValues.LED, target, brightness])
-        except Exception as e:
-            print(f"[LED] ERROR: {e}")
-
-    def set_pattern(self, pattern_id: int, target: int = 0) -> None:
-        """Activa una animación predefinida en el Arduino."""
-        try:
-            self._check_pattern(pattern_id)
-            self._port.send_data([CommandValues.LED_PATTERN, NodeValues.LED, target, pattern_id])
-        except Exception as e:
-            print(f"[LED] ERROR: {e}")
-
-    def off(self, target: int = 0) -> None:
-        """Apaga todos los LEDs del grupo."""
-        self.set_brightness(0, target)

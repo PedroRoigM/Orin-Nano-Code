@@ -1,93 +1,185 @@
+"""
+arduino_controller.py
+=====================
+Controlador central del Arduino (nuevo firmware ArduinoBoardFirmware).
+
+Abre UNA sola conexión serial y la comparte entre todos los sub-controladores.
+El UltrasonicObserver actúa como listener general bidireccional:
+  · Lee TODAS las líneas del Arduino (US, LED_ack, LCD_ack, MOT_ack, BUZZ_ack).
+  · Mantiene el estado de seguridad (distancia/bloqueo).
+  · Todos los demás sub-controladores solo ESCRIBEN vía SharedPort con write_lock.
+
+Uso básico:
+    arduino = ArduinoController("/dev/ttyACM0")
+    arduino.start()
+
+    arduino.tank.forward(100)
+    arduino.leds.on()
+    arduino.lcd.display_text("Hola R2!")
+    arduino.buzzer.beep()
+
+    if arduino.can_move_forward:
+        arduino.tank.forward(100)
+    else:
+        arduino.tank.stop()
+        arduino.buzzer.react_to_obstacle(arduino.ultrasonic.distance_cm)
+
+    arduino.stop()
+
+Reacción automática al ultrasónico:
+    ArduinoController puede configurarse con callbacks para reaccionar
+    automáticamente cuando el sensor detecta un obstáculo:
+        arduino.on_obstacle = lambda cm: arduino.tank.stop()
+"""
+
 import serial
 import threading
+from typing import Optional, Callable
 
-from controllers.shared_port import SharedPort
-from controllers.ultrasonic_observer import UltrasonicObserver
-from controllers.tank_controller import TankController
-from controllers.led_controller import LedController
-from controllers.lcd_controller import LcdController
+from controllers.shared_port          import SharedPort
+from controllers.ultrasonic_observer  import UltrasonicObserver
+from controllers.tank_controller      import TankController
+from controllers.led_controller       import LedController
+from controllers.lcd_controller       import LcdController
+from controllers.buzzer_controller    import BuzzerController
+from controllers.eyes_controller      import EyesController
 
 
 class ArduinoController:
     """
-    Controlador central del Arduino.
+    Controlador central para el nuevo firmware ArduinoBoardFirmware.
 
-    Abre UNA sola conexión serial y la comparte entre todos los
-    sub-controladores y el observador ultrasónico.
+    Sub-controladores expuestos:
+      .tank        — TankController    (MOT:FWD/REV/STOP)
+      .leds        — LedController     (LED:ON/OFF/BLINK)
+      .lcd         — LcdController     (LCD:<texto>)
+      .buzzer      — BuzzerController  (BUZZ:<freq>,<ms> / BUZZ:OFF)
+      .eyes        — EyesController    (EYES:<emo>,r,g,b,sq,wd / GAZE:gx,gy)
+      .ultrasonic  — UltrasonicObserver (listener serial + estado US)
 
-    El hilo del observador sólo lee (readline); todos los demás
-    escriben a través de SharedPort con un único write_lock, por lo que
-    no hay colisiones.
+    Propiedades de seguridad (compatibles con tensor_rt.py):
+      .can_move_forward   → True si el sensor no detecta obstáculo
+      .can_move_backward  → True (sin sensor trasero en el nuevo firmware)
+      .can_turn           → True si el sensor no detecta obstáculo
 
-    Uso:
-        arduino = ArduinoController("/dev/ttyACM0")
-        arduino.start()
-
-        arduino.tank.forward(50)
-        arduino.leds.set_color(255, 0, 0)
-        arduino.lcd.display_text("Hola!", line=0)
-
-        if arduino.ultrasonic.is_front_blocked:
-            arduino.tank.stop()
-
-        arduino.stop()   # al salir del programa
+    Callback de obstáculo:
+      .on_obstacle = lambda distance_cm: ...
+      Se llama automáticamente cuando el sensor pasa de libre a bloqueado.
     """
 
     def __init__(
         self,
-        port_name: str,
-        baudrate: int = 9600,
+        port_name:               str,
+        baudrate:                int   = 9600,
         ultrasonic_threshold_cm: float = 10.0,
+        verbose:                 bool  = False,
     ):
-        # ── Shared serial ────────────────────────────────────────────
+        # ── Puerto serial compartido ──────────────────────────────────────────
         self._ser        = serial.Serial(port_name, baudrate, timeout=1)
         self._write_lock = threading.Lock()
         self._port       = SharedPort(self._ser, self._write_lock)
 
-        # ── Safety observer (reads only) ─────────────────────────────
+        # ── Listener / observer ultrasónico (lector único del serial) ─────────
         self.ultrasonic = UltrasonicObserver(
-            self._ser,
-            threshold_cm=ultrasonic_threshold_cm,
+            ser           = self._ser,
+            threshold_cm  = ultrasonic_threshold_cm,
+            write_port    = self._port,   # para poder enviar US:PING
+            verbose_acks  = verbose,
+            verbose_us    = True,
         )
 
-        # ── Movement ─────────────────────────────────────────────────
-        self.tank = TankController(self._port)
+        # ── Controladores de actuadores ───────────────────────────────────────
+        self.tank   = TankController(self._port,   verbose=verbose)
+        self.leds   = LedController(self._port,    verbose=verbose)
+        self.lcd    = LcdController(self._port,    verbose=verbose)
+        self.buzzer = BuzzerController(self._port,  verbose=verbose)
+        self.eyes   = EyesController(self._port,   verbose=verbose)
 
-        # ── Output peripherals ───────────────────────────────────────
-        self.leds = LedController(self._port)
-        self.lcd  = LcdController(self._port)
+        # ── Callback de obstáculo (opcional) ──────────────────────────────────
+        # Asignar una función para reacción automática al sensor:
+        #   arduino.on_obstacle = lambda cm: (arduino.tank.stop(), arduino.buzzer.beep(800, 100))
+        self.on_obstacle: Optional[Callable[[float], None]] = None
 
-        print(f"[Arduino] Connected on {port_name} @ {baudrate} baud")
+        # Conectar el callback interno al observer
+        self.ultrasonic.on_ack["US"] = None   # reservado para futuros ACKs
+        self._register_obstacle_watcher()
 
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
+        print(f"[Arduino] Conectado en {port_name} @ {baudrate} baud | "
+              f"umbral US: {ultrasonic_threshold_cm} cm")
+
+    # ── Ciclo de vida ─────────────────────────────────────────────────────────
 
     def start(self) -> None:
-        """Starts the ultrasonic observer background thread."""
+        """Arranca el listener serial en background."""
         self.ultrasonic.start()
-        print("[Arduino] Ultrasonic observer started")
+        print("[Arduino] Listener serial arrancado.")
 
     def stop(self) -> None:
-        """Stops movement and the observer, then closes the serial port."""
+        """Para el motor, detiene el listener y cierra el puerto serial."""
         self.tank.stop()
+        self.leds.off()
+        self.buzzer.off()
         self.ultrasonic.stop()
         if self._ser.is_open:
             self._ser.close()
-        print("[Arduino] Stopped and port closed")
+        print("[Arduino] Detenido y puerto cerrado.")
 
-    # ------------------------------------------------------------------
-    # Convenience safety helpers
-    # ------------------------------------------------------------------
+    # ── Propiedades de seguridad (API compatible con tensor_rt.py) ────────────
 
     @property
     def can_move_forward(self) -> bool:
+        """True si el sensor delantero no detecta obstáculo."""
         return not self.ultrasonic.is_front_blocked
 
     @property
     def can_move_backward(self) -> bool:
-        return not self.ultrasonic.is_back_blocked
+        """True siempre (sin sensor trasero en el nuevo firmware)."""
+        return True
 
     @property
     def can_turn(self) -> bool:
+        """True si el robot puede girar (sensor despejado)."""
         return not self.ultrasonic.is_blocked
+
+    # ── Helpers de conveniencia ───────────────────────────────────────────────
+
+    def react_to_emotion(self, emotion: str, confidence: float = 1.0) -> None:
+        """
+        Reacciona a una emoción detectada en todos los actuadores:
+          · LED: on/blink/off según la emoción
+          · LCD: muestra la emoción y confianza
+          · Buzzer: tono asociado a la emoción
+        """
+        self.leds.set_emotion(emotion)
+        self.lcd.display_emotion(emotion, confidence)
+        self.buzzer.react_to_emotion(emotion)
+
+    def display_sensor_info(self) -> None:
+        """Muestra la distancia del sensor en el LCD."""
+        self.lcd.display_distance(self.ultrasonic.distance_cm)
+
+    # ── Callback de obstáculo ─────────────────────────────────────────────────
+
+    def _register_obstacle_watcher(self) -> None:
+        """Registra un watcher que llama a self.on_obstacle cuando el sensor se bloquea."""
+        observer = self.ultrasonic
+
+        def _watcher(controller_id: str, payload: str) -> None:
+            pass  # El estado ya es gestionado por UltrasonicObserver
+
+        # Inyectamos el watcher directamente en el dispatch del observer
+        # usando monkey-patch del método _handle_us
+        original_handle_us = observer._handle_us
+
+        def _patched_handle_us(ctrl_id: str, pl: str) -> None:
+            was_blocked = observer.is_blocked
+            original_handle_us(ctrl_id, pl)
+            now_blocked = observer.is_blocked
+            # Flanco ascendente: acaba de bloquearse
+            if not was_blocked and now_blocked and self.on_obstacle is not None:
+                try:
+                    self.on_obstacle(observer.distance_cm)
+                except Exception as e:
+                    print(f"[Arduino] Error en on_obstacle callback: {e}")
+
+        observer._handle_us = _patched_handle_us

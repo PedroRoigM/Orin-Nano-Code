@@ -1,3 +1,21 @@
+"""
+tensor_rt.py
+============
+Pipeline principal Jetson Orin Nano — robot de acompañamiento médico.
+
+Componentes integrados:
+  · TensorRT          — clasificación de emociones en GPU (emotion.trt)
+  · MTCNN             — detección de caras en CUDA
+  · ArduinoController — LEDs, LCD, buzzer, motor DC, sensor ultrasónico
+  · EyesController    — pantallas oculares GC9A01 vía Arduino (SERIAL)
+  · BehaviorEngine    — diccionario de comportamiento médico editable
+  · LED strip         — stub NeoPixel (activar cuando el firmware lo soporte)
+
+Filosofía médica (ver companion_behavior.py):
+  El robot NO refuerza emociones negativas. Usa colores y sonidos complementarios
+  para calmar: tristeza→naranja cálido, ira→azul sereno, miedo→dorado cálido.
+"""
+
 import cv2
 import numpy as np
 import tensorrt as trt
@@ -7,31 +25,33 @@ from facenet_pytorch import MTCNN
 import torch
 from time import time
 
-from processing.emotion_color_mapper import EmotionColorMapper
-from controllers.arduino_controller import ArduinoController
+from processing.emotion_color_mapper   import EmotionColorMapper
+from controllers.arduino_controller    import ArduinoController
+from companion_behavior                import BehaviorEngine, BEHAVIOR
 
 # ---------------------------------------------------------------------------
-# Config
+# Configuración — editar aquí para ajustar el comportamiento general
 # ---------------------------------------------------------------------------
 FRAME_W, FRAME_H = 640, 480
-CONF_THRESHOLD   = 0.90
-DETECT_EVERY_N_FRAMES = 2
+CONF_THRESHOLD   = 0.90           # Confianza mínima MTCNN para aceptar una cara
+DETECT_EVERY_N_FRAMES = 2         # Cada N frames se lanza MTCNN (balance CPU/GPU)
 OUTPUT_PATH = "/home/jetson/prueba/output.mp4"
+
 EMOTIONS = ["neutral", "happiness", "surprise", "sadness",
-            "anger", "disgust", "fear", "contempt"]
+            "anger",   "disgust",   "fear",     "contempt"]
 
 # Arduino
 ARDUINO_PORT         = "/dev/ttyACM0"
 ARDUINO_BAUD         = 9600
-ULTRASONIC_THRESHOLD = 10.0   # cm — stop if sensor reads below this
+ULTRASONIC_THRESHOLD = 10.0        # cm — detener motor y alertar por debajo de este valor
 
-# Face-tracking tuning
-DEAD_ZONE_X = 60   # px — error band around frame center considered "centred"
-TURN_SPEED  = 45   # motor magnitude while turning  (1-127)
-FWD_SPEED   = 40   # motor magnitude while going forward (1-127)
+# Seguimiento de cara con el motor
+DEAD_ZONE_X = 60                   # px de margen alrededor del centro (zona muerta)
+TURN_SPEED  = 45                   # velocidad de giro (1-127)
+FWD_SPEED   = 40                   # velocidad de avance (1-127)
 
 # ---------------------------------------------------------------------------
-# TensorRT engine
+# TensorRT — motor de inferencia de emociones
 # ---------------------------------------------------------------------------
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 runtime    = trt.Runtime(TRT_LOGGER)
@@ -43,7 +63,7 @@ context = engine.create_execution_context()
 
 input_shape  = (1, 1, 64, 64)
 output_shape = (1, 8)
-dtype = np.float32
+dtype        = np.float32
 
 h_input  = cuda.pagelocked_empty(trt.volume(input_shape),  dtype=dtype)
 h_output = cuda.pagelocked_empty(trt.volume(output_shape), dtype=dtype)
@@ -56,6 +76,7 @@ context.set_tensor_address("Plus692_Output_0", int(d_output))
 
 
 def classify_emotion(face_roi: np.ndarray) -> tuple[str, float]:
+    """Infiere la emoción de un recorte de cara usando TensorRT."""
     if face_roi.size == 0:
         return "unknown", 0.0
     gray    = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
@@ -73,7 +94,7 @@ def classify_emotion(face_roi: np.ndarray) -> tuple[str, float]:
 
 
 # ---------------------------------------------------------------------------
-# MTCNN
+# MTCNN — detector de caras
 # ---------------------------------------------------------------------------
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(f"MTCNN device: {device}")
@@ -86,17 +107,58 @@ mtcnn = MTCNN(
     select_largest=False,
 )
 
-# Emotion mapper
+# Mapper de colores para el overlay visual en el frame (colores FER+ estándar)
 emotionMapper = EmotionColorMapper()
 
 # ---------------------------------------------------------------------------
-# Arduino — single hub for all hardware (sensors + motors + LEDs + LCD)
+# Arduino — hub central de hardware
 # ---------------------------------------------------------------------------
 arduino = ArduinoController(ARDUINO_PORT, ARDUINO_BAUD, ULTRASONIC_THRESHOLD)
 arduino.start()
 
 # ---------------------------------------------------------------------------
-# Camera (CSI via GStreamer)
+# Callback de obstáculo ultrasónico
+# ---------------------------------------------------------------------------
+def _on_obstacle(cm: float) -> None:
+    """
+    Se ejecuta automáticamente cuando el sensor ultrasónico detecta un obstáculo.
+    El robot se detiene, los LEDs parpadean y el buzzer emite una alerta proporcional.
+    """
+    arduino.tank.stop()
+    arduino.leds.blink()
+    arduino.buzzer.react_to_obstacle(cm, ULTRASONIC_THRESHOLD)
+    print(f"[Obstacle] Obstáculo detectado a {cm:.1f} cm — motor detenido")
+
+arduino.on_obstacle = _on_obstacle
+
+# ---------------------------------------------------------------------------
+# BehaviorEngine — motor de comportamiento médico
+# Los ojos se controlan a través de arduino.eyes (EyesController → SERIAL → Arduino → SPI)
+# ---------------------------------------------------------------------------
+behavior = BehaviorEngine(arduino=arduino, eyes=arduino.eyes)
+
+# Mensaje y chime de arranque
+arduino.lcd.display_two_lines("Robot medico", "Listo :)")
+arduino.buzzer.startup_chime()
+arduino.leds.on()
+
+# ---------------------------------------------------------------------------
+# Tira de LEDs NeoPixel/WS2812 — stub
+# ---------------------------------------------------------------------------
+# Cuando el firmware Arduino soporte NeoPixel, reemplazar el cuerpo de esta
+# función con la llamada al controlador correspondiente, por ejemplo:
+#   arduino.led_strip.set_color(r, g, b)
+def set_led_strip(r: int, g: int, b: int) -> None:
+    """
+    Establece el color de la tira de LEDs NeoPixel.
+    Stub activo — conectar al firmware cuando esté disponible.
+    """
+    pass
+    # Descomentar para debug:
+    # print(f"[LED_STRIP] → RGB({r:3d},{g:3d},{b:3d})")
+
+# ---------------------------------------------------------------------------
+# Cámara CSI Jetson via GStreamer
 # ---------------------------------------------------------------------------
 GST_PIPELINE = (
     "nvarguscamerasrc sensor_id=0 ! "
@@ -113,23 +175,37 @@ out = cv2.VideoWriter(OUTPUT_PATH, cv2.VideoWriter_fourcc(*"mp4v"),
                       15, (FRAME_W, FRAME_H))
 
 # ---------------------------------------------------------------------------
-# State
+# Estado
 # ---------------------------------------------------------------------------
-boxes       = None
-det_probs   = None
-frame_count = 0
-fps_time    = time()
-fps         = 0.0
-FRAME_CX    = FRAME_W // 2
+boxes           = None
+det_probs       = None
+frame_count     = 0
+fps_time        = time()
+fps             = 0.0
+FRAME_CX        = FRAME_W // 2
+FRAME_CY        = FRAME_H // 2
+current_emotion = "neutral"
 
 print("Grabando... Pulsa Ctrl+C para detener.")
-
 cv2.namedWindow("Emotion Detection", cv2.WINDOW_NORMAL)
 cv2.setWindowProperty("Emotion Detection", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
 
-def drive_toward_face(face_cx: int) -> None:
-    """Turn or move forward to keep the first face centred on the X axis."""
+# ---------------------------------------------------------------------------
+# Lógica de movimiento
+# ---------------------------------------------------------------------------
+def drive_toward_face(face_cx: int, emotion: str) -> None:
+    """
+    Centra la primera cara detectada en el eje X girando o avanzando.
+
+    Si el comportamiento médico de la emoción actual requiere que el motor
+    se detenga (motor_pause=True en BEHAVIOR), el robot permanece quieto
+    para transmitir presencia y calma — no persigue al paciente.
+    """
+    if behavior.motor_should_pause(emotion):
+        arduino.tank.stop()
+        return
+
     error_x = face_cx - FRAME_CX
 
     if abs(error_x) <= DEAD_ZONE_X:
@@ -148,8 +224,9 @@ def drive_toward_face(face_cx: int) -> None:
         else:
             arduino.tank.stop()
 
+
 # ---------------------------------------------------------------------------
-# Main loop
+# Bucle principal
 # ---------------------------------------------------------------------------
 try:
     while True:
@@ -160,15 +237,18 @@ try:
 
         frame_count += 1
 
+        # FPS cada 30 frames
         if frame_count % 30 == 0:
             fps = 30 / (time() - fps_time)
             fps_time = time()
 
+        # Detección de caras cada N frames
         if frame_count % DETECT_EVERY_N_FRAMES == 0:
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             boxes, det_probs = mtcnn.detect(rgb)
 
         face_count = 0
+
         if boxes is not None:
             for i, box in enumerate(boxes):
                 if det_probs[i] < CONF_THRESHOLD:
@@ -183,25 +263,55 @@ try:
                 face_count += 1
                 face_roi = frame[y1:y2, x1:x2]
                 emotion, emo_conf = classify_emotion(face_roi)
-                colors = emotionMapper.get_color_dict(emotion, confidence=emo_conf)
 
-                box_color = colors['dominant_rgb']
+                # Overlay visual en el frame (colores FER+ estándar para visualización)
+                colors    = emotionMapper.get_color_dict(emotion, confidence=emo_conf)
+                box_color = colors["dominant_rgb"]
                 cv2.rectangle(frame, (x1, y1), (x2, y2), box_color, 2)
                 cv2.putText(frame, f"{emotion} {emo_conf:.0%}",
                             (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
                             0.55, box_color, 2)
 
+                # Primera cara: comportamiento + movimiento
                 if face_count == 1:
+                    current_emotion = emotion
                     face_cx = (x1 + x2) // 2
-                    print(f"Emotion: {emotion} | face_cx: {face_cx} | error: {face_cx - FRAME_CX:+d}px")
-                    drive_toward_face(face_cx)
+                    face_cy = (y1 + y2) // 2
+
+                    # Aplicar comportamiento médico (ojos siguen la cara cada frame;
+                    # LEDs, buzzer y LCD solo cambian cuando la emoción es estable)
+                    changed = behavior.apply(
+                        emotion, emo_conf,
+                        face_cx=face_cx,
+                        face_cy=face_cy,
+                        frame_w=FRAME_W,
+                        frame_h=FRAME_H,
+                    )
+
+                    if changed:
+                        # Actualizar tira de LEDs cuando el estado cambia
+                        r, g, b = behavior.get_led_strip_color(emotion)
+                        set_led_strip(r, g, b)
+                        tag = BEHAVIOR.get(emotion, {}).get("log_tag", emotion)
+                        print(f"[Behavior] {tag:10s} | conf={emo_conf:.0%} "
+                              f"| strip=RGB({r},{g},{b})")
+
+                    # Movimiento del robot (respeta motor_pause del BEHAVIOR)
+                    drive_toward_face(face_cx, emotion)
 
         else:
-            # No face detected — stop and wait
+            # Sin cara: modo espera
             arduino.tank.stop()
+            behavior.apply("no_face")
+            r, g, b = behavior.get_led_strip_color("no_face")
+            set_led_strip(r, g, b)
+            current_emotion = "no_face"
 
-        cv2.putText(frame, f"FPS: {fps:.1f} | Faces: {face_count}",
-                    (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+        # HUD — información en el frame grabado
+        hud_text = (f"FPS:{fps:.0f}  Faces:{face_count}  "
+                    f"US:{arduino.ultrasonic.distance_cm:.0f}cm  {current_emotion}")
+        cv2.putText(frame, hud_text,
+                    (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
 
         out.write(frame)
 
@@ -210,7 +320,7 @@ try:
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
         except Exception:
-            pass  # SSH sin display, ignorar
+            pass   # SSH sin display — ignorar
 
 except KeyboardInterrupt:
     print("\nDetenido por el usuario.")
