@@ -2,7 +2,7 @@
 #define LED_CONTROLLER_H
 
 #include "GeneralController.h"
-#include "PinDeclaration.h"
+
 
 // Observer for "LED" messages. Messages: "ON", "OFF", "BLINK"
 class LedController : public GeneralController

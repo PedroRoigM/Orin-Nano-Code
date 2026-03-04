@@ -98,13 +98,14 @@ void loop()
     coordinator.readAndRoute();
 
     // Periodic ultrasound measurement every 500 ms
- /*   static unsigned long lastMeasure = 0;
+    static unsigned long lastMeasure = 0;
     unsigned long now = millis();
     if (now - lastMeasure >= 500)
     {
         lastMeasure = now;
         us1.measure();
+        us2.measure();
     }
-*/
+
     // eyes1.redraw();
 }

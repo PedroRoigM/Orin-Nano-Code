@@ -182,7 +182,7 @@ void Coordinator::dispatchCommand(const String &baseId,
         Serial.println(specificId);
     }
 
-    listForType(*list, String(specificId + ":" + command));
+    notifyList(*list, String(specificId + ":" + command));
 }
 
 void Coordinator::printAllObservers() const

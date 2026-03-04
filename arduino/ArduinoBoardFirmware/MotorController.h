@@ -2,7 +2,6 @@
 #define MOTOR_CONTROLLER_H
 
 #include "GeneralController.h"
-#include "PinDeclaration.h"
 
 // Observer for "MOT" messages.
 // Message format: "<FWD|REV|STOP>,<speed 0-255>"
