@@ -16,7 +16,7 @@
 // ---------------------------------------------------------------------------
 #define PIN_LED_1   22
 #define PIN_LED_2   23
-#define LED_NUM_PIXELS 34
+#define LED_NUM_PIXELS 200
 
 // ---------------------------------------------------------------------------
 // LCD I2C
@@ -59,8 +59,10 @@
 #define ULTRASOUND_2_TRIG_PIN  40
 
 // ---------------------------------------------------------------------------
-// Eyes  (GC9A01 × 2, hardware SPI on Mega: SCK=52, MOSI=51 — declared here for reference)
+// Eyes  (GC9A01 × 2, hardware SPI on Mega)
 // ---------------------------------------------------------------------------
+#define PIN_EYES_MOSI      51
+#define PIN_EYES_SCK       52
 #define PIN_EYES_CS_LEFT   53
 #define PIN_EYES_CS_RIGHT  49
 #define PIN_EYES_DC        48

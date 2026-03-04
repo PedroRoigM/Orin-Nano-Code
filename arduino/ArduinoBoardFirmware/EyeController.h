@@ -16,11 +16,12 @@ static constexpr uint8_t EYE_CY = 120;
 class EyeController : public GeneralController
 {
 public:
-    EyeController(const String &id, int pinCs, int pinDc, int pinRst, bool mirrored = false);
+    EyeController(const String &id, int pinCs, int pinDc, int pinRst, int pinMosi, int pinSclk, bool mirrored = false);
 
     void sanityTest();
     void Update(const String &message) override;
     void redraw();
+    void begin();
 
 protected:
     void parseMessage(const String &message) override;

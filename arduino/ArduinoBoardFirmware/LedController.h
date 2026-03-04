@@ -23,6 +23,15 @@ private:
     uint8_t _r, _g, _b;
 
     uint8_t boundColor(int value);
+
+    void handleCmdOn();
+    void handleCmdOff();
+    void handleCmdColor(const String &command);
+    void handleCmdRandom();
+    void handleCmdBlink();
+    void handleCmdBrightness(const String &command);
+
+    uint8_t _brightness;
 };
 
 #endif // LED_CONTROLLER_H

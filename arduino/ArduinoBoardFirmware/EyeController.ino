@@ -1,8 +1,8 @@
 #include "EyeController.h"
 
-EyeController::EyeController(const String &id, int pinCs, int pinDc, int pinRst, bool mirrored)
+EyeController::EyeController(const String &id, int pinCs, int pinDc, int pinRst, int pinMosi, int pinSclk, bool mirrored)
     : GeneralController(id),
-      _disp(pinCs, pinDc, -1),
+      _disp(pinCs, pinDc, pinMosi, pinSclk, -1),
       _pinRst(pinRst),
       _mirrored(mirrored),
       _irisColor(rgb888to565(180, 180, 200)), // Soft blue/white
@@ -12,6 +12,10 @@ EyeController::EyeController(const String &id, int pinCs, int pinDc, int pinRst,
 {
     // Note: hardwareReset should be called by the first eye or once in setup
     // But for safety in standalone usage:
+}
+
+void EyeController::begin()
+{
     hardwareReset(_pinRst);
     _disp.begin();
     _disp.fillScreen(0x0000);

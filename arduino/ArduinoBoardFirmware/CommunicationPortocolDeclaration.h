@@ -40,6 +40,7 @@
 #define LED_CMD_RANDOM            "RANDOM"
 #define LED_STATE_PREFIX          "STATE"
 #define LED_COLOR_PREFIX          "COLOR"
+#define LED_BRIGHTNESS_PREFIX     "BRIGHTNESS"
 
 // ---------------------------------------------------------------------------
 // LCD
