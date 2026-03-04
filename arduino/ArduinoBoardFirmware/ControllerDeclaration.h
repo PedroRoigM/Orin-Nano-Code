@@ -12,5 +12,6 @@
 #include "MotorController.h"
 #include "UltrasoundController.h"
 #include "Coordinator.h"
+#include "EyesController.h"
 
 #endif // CONTROLLER_DECLARATION_H

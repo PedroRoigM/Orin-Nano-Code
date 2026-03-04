@@ -25,7 +25,9 @@ LcdController lcd3("LCD_3", LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
 BuzzerController buzzer1("BUZZ_1", PIN_BUZZER);
 MotorController motor1("MOT_1", PIN_MOTOR_1_IN1, PIN_MOTOR_1_IN2, PIN_MOTOR_1_EN);
 UltrasoundController us1("US_1", PIN_ULTRASOUND_TRIG, PIN_ULTRASOUND_ECHO);
-
+EyesController eyes1("EYES_1",
+                     PIN_EYES_CS_LEFT, PIN_EYES_CS_RIGHT,
+                     PIN_EYES_DC, PIN_EYES_RST);
 // ---------------------------------------------------------------------------
 // Coordinator
 // ---------------------------------------------------------------------------
@@ -51,6 +53,9 @@ void setup()
     coordinator.Attach(&motor1, "MOT");
     coordinator.Attach(&us1, "US");
 
+    coordinator.Attach(&eyes1, "EYES");
+    coordinator.Attach(&eyes1, "GAZE");
+
     coordinator.printAllObservers();
 
     // -----------------------------------------------------------------------
@@ -72,6 +77,8 @@ void setup()
 
     us1.sanityTest();
 
+    eyes1.sanityTest();
+
     Serial.println("========== TESTS COMPLETE ==========");
     Serial.println("[Setup] Ready. Waiting for commands...");
 }
@@ -92,4 +99,6 @@ void loop()
         lastMeasure = now;
         us1.measure();
     }
+
+    eyes1.redraw();
 }

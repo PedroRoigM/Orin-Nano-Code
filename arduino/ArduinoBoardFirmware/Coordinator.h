@@ -37,12 +37,14 @@ private:
     IObserver *_buzzerStorage[MAX_BUZZER_OBSERVERS];
     IObserver *_motorStorage[MAX_MOTOR_OBSERVERS];
     IObserver *_ultrasoundStorage[MAX_ULTRASOUND_OBSERVERS];
+    IObserver *_eyesStorage[MAX_EYES_OBSERVERS];
 
     Vector<IObserver *> _ledObservers;
     Vector<IObserver *> _lcdObservers;
     Vector<IObserver *> _buzzerObservers;
     Vector<IObserver *> _motorObservers;
     Vector<IObserver *> _ultrasoundObservers;
+    Vector<IObserver *> _eyesObservers;
 
     Vector<IObserver *> *listForType(const String &type);
     void notifyList(Vector<IObserver *> &list, const String &message);

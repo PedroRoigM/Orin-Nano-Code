@@ -2,11 +2,12 @@
 
 Coordinator::Coordinator()
 {
-    _ledObservers.setStorage(_ledStorage,             MAX_LED_OBSERVERS,        0);
-    _lcdObservers.setStorage(_lcdStorage,             MAX_LCD_OBSERVERS,        0);
-    _buzzerObservers.setStorage(_buzzerStorage,       MAX_BUZZER_OBSERVERS,     0);
-    _motorObservers.setStorage(_motorStorage,         MAX_MOTOR_OBSERVERS,      0);
+    _ledObservers.setStorage(_ledStorage, MAX_LED_OBSERVERS, 0);
+    _lcdObservers.setStorage(_lcdStorage, MAX_LCD_OBSERVERS, 0);
+    _buzzerObservers.setStorage(_buzzerStorage, MAX_BUZZER_OBSERVERS, 0);
+    _motorObservers.setStorage(_motorStorage, MAX_MOTOR_OBSERVERS, 0);
     _ultrasoundObservers.setStorage(_ultrasoundStorage, MAX_ULTRASOUND_OBSERVERS, 0);
+    _eyesObservers.setStorage(_eyesStorage, MAX_EYES_OBSERVERS, 0);
 }
 
 void Coordinator::Attach(IObserver *observer, const String &type)
@@ -21,7 +22,8 @@ void Coordinator::Attach(IObserver *observer, const String &type)
 void Coordinator::Detach(IObserver *observer, const String &type)
 {
     Vector<IObserver *> *list = listForType(type);
-    if (list == nullptr) return;
+    if (list == nullptr)
+        return;
 
     for (size_t i = 0; i < list->size(); i++)
     {
@@ -38,10 +40,10 @@ void Coordinator::Detach(IObserver *observer) { (void)observer; }
 
 void Coordinator::Notify()
 {
-    notifyList(_ledObservers,        "BROADCAST");
-    notifyList(_lcdObservers,        "BROADCAST");
-    notifyList(_buzzerObservers,     "BROADCAST");
-    notifyList(_motorObservers,      "BROADCAST");
+    notifyList(_ledObservers, "BROADCAST");
+    notifyList(_lcdObservers, "BROADCAST");
+    notifyList(_buzzerObservers, "BROADCAST");
+    notifyList(_motorObservers, "BROADCAST");
     notifyList(_ultrasoundObservers, "BROADCAST");
 }
 
@@ -61,11 +63,13 @@ void Coordinator::Notify(const String &type, const String &message)
 
 void Coordinator::readAndRoute()
 {
-    if (!Serial.available()) return;
+    if (!Serial.available())
+        return;
 
     String line = Serial.readStringUntil('\n');
     line.trim();
-    if (line.length() == 0) return;
+    if (line.length() == 0)
+        return;
 
     int colonIndex = line.indexOf(':');
     if (colonIndex <= 0)
@@ -75,7 +79,7 @@ void Coordinator::readAndRoute()
         return;
     }
 
-    String type    = line.substring(0, colonIndex);
+    String type = line.substring(0, colonIndex);
     String payload = line.substring(colonIndex + 1);
     type.toUpperCase();
 
@@ -84,20 +88,35 @@ void Coordinator::readAndRoute()
 
 void Coordinator::printAllObservers() const
 {
-    Serial.println(F("=== LED ==="));       ListObservers(_ledObservers);
-    Serial.println(F("=== LCD ==="));       ListObservers(_lcdObservers);
-    Serial.println(F("=== BUZZER ==="));    ListObservers(_buzzerObservers);
-    Serial.println(F("=== MOTOR ==="));     ListObservers(_motorObservers);
-    Serial.println(F("=== ULTRASOUND ===")); ListObservers(_ultrasoundObservers);
+    Serial.println(F("=== LED ==="));
+    ListObservers(_ledObservers);
+    Serial.println(F("=== LCD ==="));
+    ListObservers(_lcdObservers);
+    Serial.println(F("=== BUZZER ==="));
+    ListObservers(_buzzerObservers);
+    Serial.println(F("=== MOTOR ==="));
+    ListObservers(_motorObservers);
+    Serial.println(F("=== ULTRASOUND ==="));
+    ListObservers(_ultrasoundObservers);
+    Serial.println(F("=== EYES ==="));
+    ListObservers(_eyesObservers);
 }
 
 Vector<IObserver *> *Coordinator::listForType(const String &type)
 {
-    if (type == "LED")  return &_ledObservers;
-    if (type == "LCD")  return &_lcdObservers;
-    if (type == "BUZZ") return &_buzzerObservers;
-    if (type == "MOT")  return &_motorObservers;
-    if (type == "US")   return &_ultrasoundObservers;
+    if (type == "LED")
+        return &_ledObservers;
+    if (type == "LCD")
+        return &_lcdObservers;
+    if (type == "BUZZ")
+        return &_buzzerObservers;
+    if (type == "MOT")
+        return &_motorObservers;
+    if (type == "US")
+        return &_ultrasoundObservers;
+    if (type == "EYES" || type == "GAZE")
+        return &_eyesObservers;
+
     return nullptr;
 }
 

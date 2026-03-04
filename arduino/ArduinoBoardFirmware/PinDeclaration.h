@@ -26,12 +26,20 @@ const int PIN_BUZZER = 8;
 // ---------------------------------------------------------------------------
 const int PIN_MOTOR_1_IN1 = 5;
 const int PIN_MOTOR_1_IN2 = 6;
-const int PIN_MOTOR_1_EN  = 7;
+const int PIN_MOTOR_1_EN = 7;
 
 // ---------------------------------------------------------------------------
 // Ultrasound Sensor Pins (HC-SR04)
 // ---------------------------------------------------------------------------
 const int PIN_ULTRASOUND_TRIG = 9;
 const int PIN_ULTRASOUND_ECHO = 10;
+
+// ── Eyes (GC9A01 × 2, SPI hardware) ─────────────────────────────────────
+// Arduino Mega 2560: SCK=52, MOSI=51 (hardware SPI, no declarar aquí)
+#define PIN_EYES_CS_LEFT 10
+#define PIN_EYES_CS_RIGHT 9
+#define PIN_EYES_DC 8
+#define PIN_EYES_RST 7
+#define MAX_EYES_OBSERVERS 1
 
 #endif // PIN_DECLARATION_H
