@@ -6,6 +6,7 @@ LedController::LedController(const String &id, int pin, int numPixels)
       _r(255), _g(255), _b(255)
 {
     _strip.begin();
+    _strip.setBrightness(50);
 }
 
 void LedController::sanityTest()
