@@ -31,17 +31,50 @@ void UltrasoundController::sanityTest()
 void UltrasoundController::measure()
 {
     long distanceCm = readDistanceCm();
-    sendToSerial(String(ULTRASOUND_DISTANCE_MEASURED_PREFIX) + ":" + String(distanceCm));
+    if (distanceCm > 0)
+    {
+        sendToSerial(String(ULTRASOUND_DISTANCE_MEASURED_PREFIX) + ":" + String(distanceCm));
+    }
+    else
+    {
+        sendToSerial(String(ULTRASOUND_DISTANCE_MEASURED_PREFIX) + ":" + String(ERROR_MESSAGE));
+    }
 }
 
+// ---------------------------------------------------------------------------
+// Update()
+//
+// Called by the Coordinator with a message in the form:
+//   {SPECIFIC_ID}:{COMMAND}      e.g.  "US_1:PING"
+//
+// The Coordinator broadcasts to every observer in the US list, so we must
+// check that the SPECIFIC_ID matches our own observerId before acting.
+// ---------------------------------------------------------------------------
 void UltrasoundController::Update(const String &message)
 {
     parseMessage(message);
 }
 
+// ---------------------------------------------------------------------------
+// parseMessage()
+//
+// Splits "{SPECIFIC_ID}:{COMMAND}" and acts only when:
+//   1. The SPECIFIC_ID matches this controller's observerId, AND
+//   2. The COMMAND is ULTRASOUND_PING_COMMAND ("PING")
+// ---------------------------------------------------------------------------
 void UltrasoundController::parseMessage(const String &message)
 {
-    if (message == ULTRASOUND_PING_COMMAND)
+    int colonIndex = message.indexOf(':');
+    if (colonIndex <= 0)
+        return;
+
+    String targetId = message.substring(0, colonIndex);
+    String command  = message.substring(colonIndex + 1);
+
+    if (targetId != observerId)
+        return;
+
+    if (command == ULTRASOUND_PING_COMMAND)
     {
         measure();
     }
