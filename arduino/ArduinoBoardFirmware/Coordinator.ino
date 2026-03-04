@@ -61,29 +61,128 @@ void Coordinator::Notify(const String &type, const String &message)
     }
 }
 
+// ---------------------------------------------------------------------------
+// readAndRoute()
+//
+// Protocol:  {BASE_ID}:{SPECIFIC_ID}:{COMMAND}   (newline-terminated)
+// Examples:
+//   US:US_1:PING
+//   LED:LED_2:ON
+//   MOT:MOT_3:FWD,200
+//   EYES:EYES_1:happy,255,200,0,10,0
+//   GAZE:EYES_1:30,-10
+//
+// Delegates to three helpers:
+//   parseMessage()    — reads Serial and tokenises the line
+//   isValidMessage()  — validates each field, prints errors
+//   dispatchCommand() — routes the command to the matching observer
+// ---------------------------------------------------------------------------
 void Coordinator::readAndRoute()
 {
     if (!Serial.available())
         return;
 
+    String baseId, specificId, command;
+
+    if (!parseMessage(baseId, specificId, command))
+        return;
+
+    if (!isValidMessage(baseId, specificId, command))
+        return;
+
+    dispatchCommand(baseId, specificId, command);
+}
+
+// ---------------------------------------------------------------------------
+// parseMessage()
+//
+// Reads one newline-terminated line from Serial and splits it into the three
+// protocol fields.  Returns false if the line is empty or malformed.
+// ---------------------------------------------------------------------------
+bool Coordinator::parseMessage(String &baseId, String &specificId, String &command)
+{
     String line = Serial.readStringUntil('\n');
     line.trim();
     if (line.length() == 0)
-        return;
+        return false;
 
-    int colonIndex = line.indexOf(':');
-    if (colonIndex <= 0)
+    int firstColon = line.indexOf(':');
+    if (firstColon <= 0)
     {
-        Serial.print(F("[Coordinator] Malformed: "));
+        Serial.print(F("[Parse] Malformed (no base id): "));
         Serial.println(line);
-        return;
+        return false;
     }
 
-    String type = line.substring(0, colonIndex);
-    String payload = line.substring(colonIndex + 1);
-    type.toUpperCase();
+    String rest = line.substring(firstColon + 1);   // "SPECIFIC_ID:COMMAND"
+    int secondColon = rest.indexOf(':');
+    if (secondColon <= 0)
+    {
+        Serial.print(F("[Parse] Malformed (no specific id): "));
+        Serial.println(line);
+        return false;
+    }
 
-    Notify(type, payload);
+    baseId     = line.substring(0, firstColon);
+    baseId.toUpperCase();
+    specificId = rest.substring(0, secondColon);
+    command    = rest.substring(secondColon + 1);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// isValidMessage()
+//
+// Validates that the parsed fields are non-empty and that the BASE_ID maps
+// to a known observer list.  Prints a descriptive error for each failure.
+// Returns false if any check fails.
+// ---------------------------------------------------------------------------
+bool Coordinator::isValidMessage(const String &baseId,
+                                 const String &specificId,
+                                 const String &command)
+{
+    if (baseId.length() == 0)
+    {
+        Serial.println(F("[Validate] Empty base id"));
+        return false;
+    }
+    if (specificId.length() == 0)
+    {
+        Serial.println(F("[Validate] Empty specific id"));
+        return false;
+    }
+    if (command.length() == 0)
+    {
+        Serial.println(F("[Validate] Empty command"));
+        return false;
+    }
+    if (listForType(baseId) == nullptr)
+    {
+        Serial.print(F("[Validate] Unknown base id: "));
+        Serial.println(baseId);
+        return false;
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// dispatchCommand()
+//
+// Looks up the observer list for BASE_ID and delivers COMMAND to the single
+// observer whose id matches SPECIFIC_ID.  Reports if no match is found.
+// ---------------------------------------------------------------------------
+void Coordinator::dispatchCommand(const String &baseId,
+                                  const String &specificId,
+                                  const String &command)
+{
+    Vector<IObserver *> *list = listForType(baseId);
+    if (list == nullptr)
+    {
+        Serial.print(F("[Dispatch] No observer for id: "));
+        Serial.println(specificId);
+    }
+
+    listForType(*list, String(specificId + ":" + command));
 }
 
 void Coordinator::printAllObservers() const
@@ -104,22 +203,25 @@ void Coordinator::printAllObservers() const
 
 Vector<IObserver *> *Coordinator::listForType(const String &type)
 {
-    if (type == "LED")
+    if (type == LED_BASE_ID)
         return &_ledObservers;
-    if (type == "LCD")
+    if (type == LCD_BASE_ID)
         return &_lcdObservers;
-    if (type == "BUZZ")
+    if (type == BUZZER_BASE_ID)
         return &_buzzerObservers;
-    if (type == "MOT")
+    if (type == MOTOR_BASE_ID)
         return &_motorObservers;
     if (type == ULTRASOUND_BASE_ID)
         return &_ultrasoundObservers;
-    if (type == "EYES" || type == "GAZE")
+    if (type == EYES_BASE_ID || type == EYES_GAZE_BASE_ID)
         return &_eyesObservers;
 
     return nullptr;
 }
 
+// ---------------------------------------------------------------------------
+// notifyList  — broadcast a message to every observer in the list
+// ---------------------------------------------------------------------------
 void Coordinator::notifyList(Vector<IObserver *> &list, const String &message)
 {
     for (size_t i = 0; i < list.size(); i++)

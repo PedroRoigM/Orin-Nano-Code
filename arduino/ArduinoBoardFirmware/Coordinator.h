@@ -5,8 +5,11 @@
 #include "CommunicationPortocolDeclaration.h"
 // ---------------------------------------------------------------------------
 // Coordinator : ISubject
-// Maintains one Vector<IObserver*> per controller type. Parses incoming serial
-// messages ("<TYPE>:<payload>") and routes payloads to the matching list.
+// Maintains one Vector<IObserver*> per controller type.
+// readAndRoute() tokenises incoming serial messages and delegates to:
+//   parseMessage()    — Serial I/O and tokenisation
+//   isValidMessage()  — field validation and error reporting
+//   dispatchCommand() — routing the command to the matching observer
 // ---------------------------------------------------------------------------
 class Coordinator : public ISubject
 {
@@ -48,6 +51,11 @@ private:
 
     Vector<IObserver *> *listForType(const String &type);
     void notifyList(Vector<IObserver *> &list, const String &message);
+
+    // readAndRoute() helpers
+    bool parseMessage(String &baseId, String &specificId, String &command);
+    bool isValidMessage(const String &baseId, const String &specificId, const String &command);
+    void dispatchCommand(const String &baseId, const String &specificId, const String &command);
 };
 
 #endif // COORDINATOR_H
