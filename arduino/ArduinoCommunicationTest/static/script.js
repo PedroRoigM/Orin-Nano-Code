@@ -40,7 +40,7 @@ connectBtn.onclick = async () => {
     const response = await fetch('/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ port, baudrate: 115200 })
+        body: JSON.stringify({ port, baudrate: 9600 })
     });
 
     const result = await response.json();
@@ -101,6 +101,19 @@ async function sendCommand(baseId, idElement, command) {
 }
 
 // Specialized Commands
+function sendLedColorCommand() {
+    const picker = document.getElementById('led-color-picker');
+    const color = picker.value; // #RRGGBB
+    const r = parseInt(color.substr(1, 2), 16);
+    const g = parseInt(color.substr(3, 2), 16);
+    const b = parseInt(color.substr(5, 2), 16);
+    sendCommand('LED', 'led-id', `COLOR:${r},${g},${b}`);
+}
+
+function sendLedRandomCommand() {
+    sendCommand('LED', 'led-id', 'RANDOM');
+}
+
 function sendLCDCommand() {
     const id = document.getElementById('lcd-id').value;
     const text = document.getElementById('lcd-text').value;

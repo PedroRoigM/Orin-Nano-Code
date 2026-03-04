@@ -31,15 +31,23 @@
             <div class="controls-grid">
                 <!-- LED Control -->
                 <div class="card component-card" data-base-id="LED">
-                    <h3>LED Control</h3>
+                    <h3>LED Control (NeoPixel)</h3>
                     <div class="input-row">
                         <label>ID:</label>
                         <input type="text" value="LED_1" id="led-id">
+                    </div>
+                    <div class="input-row">
+                        <label>Color:</label>
+                        <input type="color" id="led-color-picker" value="#ffffff">
                     </div>
                     <div class="btn-group">
                         <button onclick="sendCommand('LED', 'led-id', 'ON')">ON</button>
                         <button onclick="sendCommand('LED', 'led-id', 'OFF')">OFF</button>
                         <button onclick="sendCommand('LED', 'led-id', 'BLINK')">BLINK</button>
+                    </div>
+                    <div class="btn-group" style="margin-top: 0.5rem;">
+                        <button onclick="sendLedColorCommand()" class="btn-primary">Set Color</button>
+                        <button onclick="sendLedRandomCommand()" class="btn-secondary">Random</button>
                     </div>
                 </div>
 
