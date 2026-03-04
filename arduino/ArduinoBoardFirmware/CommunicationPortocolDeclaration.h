@@ -36,7 +36,10 @@
 #define LED_CMD_ON                "ON"
 #define LED_CMD_OFF               "OFF"
 #define LED_CMD_BLINK             "BLINK"
+#define LED_CMD_COLOR             "COLOR"
+#define LED_CMD_RANDOM            "RANDOM"
 #define LED_STATE_PREFIX          "STATE"
+#define LED_COLOR_PREFIX          "COLOR"
 
 // ---------------------------------------------------------------------------
 // LCD

@@ -14,8 +14,8 @@
 // Hardware instances
 // ---------------------------------------------------------------------------
 
-// LedController led1("LED_1", PIN_LED_1);
-// LedController led2("LED_2", PIN_LED_2);
+LedController led1(LED_ID(1), PIN_LED_1, LED_NUM_PIXELS);
+LedController led2(LED_ID(2), PIN_LED_2, LED_NUM_PIXELS);
 // LedController led3("LED_3", PIN_LED_3);
 
 // LcdController lcd1("LCD_1", LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
@@ -45,8 +45,8 @@ void setup()
     Serial.begin(9600);
     Wire.begin();
 
-    // coordinator.Attach(&led1, "LED");
-    // coordinator.Attach(&led2, "LED");
+    coordinator.Attach(&led1, LED_BASE_ID);
+    coordinator.Attach(&led2, LED_BASE_ID);
     // coordinator.Attach(&led3, "LED");
 
     // coordinator.Attach(&lcd1, "LCD");
@@ -68,8 +68,8 @@ void setup()
     // -----------------------------------------------------------------------
     Serial.println("========== SANITY TESTS ==========");
 
-    // led1.sanityTest();
-    // led2.sanityTest();
+    led1.sanityTest();
+    led2.sanityTest();
     // led3.sanityTest();
 
     // lcd1.sanityTest();
