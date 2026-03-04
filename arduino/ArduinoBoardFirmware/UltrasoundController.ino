@@ -31,7 +31,7 @@ void UltrasoundController::sanityTest()
 void UltrasoundController::measure()
 {
     long distanceCm = readDistanceCm();
-    sendToSerial(String(ULTRASOUND_DISTANCE_MEASURED_PREFIX) + " | " + String(distanceCm));
+    sendToSerial(String(ULTRASOUND_DISTANCE_MEASURED_PREFIX) + ":" + String(distanceCm));
 }
 
 void UltrasoundController::Update(const String &message)
@@ -41,7 +41,7 @@ void UltrasoundController::Update(const String &message)
 
 void UltrasoundController::parseMessage(const String &message)
 {
-    if (message == "PING")
+    if (message == ULTRASOUND_PING_COMMAND)
     {
         measure();
     }

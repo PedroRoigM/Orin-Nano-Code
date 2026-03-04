@@ -2,7 +2,7 @@
 #define COORDINATOR_H
 
 #include "ObserverPatternDelcaration.h"
-
+#include "CommunicationPortocolDeclaration.h"
 // ---------------------------------------------------------------------------
 // Coordinator : ISubject
 // Maintains one Vector<IObserver*> per controller type. Parses incoming serial

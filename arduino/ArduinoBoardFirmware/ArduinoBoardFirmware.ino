@@ -13,20 +13,25 @@
 // ---------------------------------------------------------------------------
 // Hardware instances
 // ---------------------------------------------------------------------------
-LedController led1("LED_1", PIN_LED_1);
-LedController led2("LED_2", PIN_LED_2);
-LedController led3("LED_3", PIN_LED_3);
 
-LcdController lcd1("LCD_1", LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
-LcdController lcd2("LCD_2", LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
-LcdController lcd3("LCD_3", LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
+// LedController led1("LED_1", PIN_LED_1);
+// LedController led2("LED_2", PIN_LED_2);
+// LedController led3("LED_3", PIN_LED_3);
 
-BuzzerController buzzer1("BUZZ_1", PIN_BUZZER);
-MotorController motor1("MOT_1", PIN_MOTOR_1_IN1, PIN_MOTOR_1_IN2, PIN_MOTOR_1_EN);
-UltrasoundController us1("US_1", PIN_ULTRASOUND_TRIG, PIN_ULTRASOUND_ECHO);
-EyesController eyes1("EYES_1",
-                     PIN_EYES_CS_LEFT, PIN_EYES_CS_RIGHT,
-                     PIN_EYES_DC, PIN_EYES_RST);
+// LcdController lcd1("LCD_1", LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
+// LcdController lcd2("LCD_2", LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
+// LcdController lcd3("LCD_3", LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
+
+// BuzzerController buzzer1("BUZZ_1", PIN_BUZZER);
+// MotorController motor1("MOT_1", PIN_MOTOR_1_IN1, PIN_MOTOR_1_IN2, PIN_MOTOR_1_EN);
+
+UltrasoundController us1(ULTRASOUND_ID(1), ULTRADOUNS_1_ECHO_PIN, ULTRADOUNS_1_TRIG_PIN);
+UltrasoundController us2(ULTRASOUND_ID(2), ULTRADOUNS_2_ECHO_PIN, ULTRADOUNS_2_TRIG_PIN);
+
+// EyesController eyes1("EYES_1",
+//                      PIN_EYES_CS_LEFT, PIN_EYES_CS_RIGHT,
+//                      PIN_EYES_DC, PIN_EYES_RST);
+
 // ---------------------------------------------------------------------------
 // Coordinator
 // ---------------------------------------------------------------------------
@@ -40,20 +45,21 @@ void setup()
     Serial.begin(9600);
     Wire.begin();
 
-    coordinator.Attach(&led1, "LED");
-    coordinator.Attach(&led2, "LED");
-    coordinator.Attach(&led3, "LED");
+    // coordinator.Attach(&led1, "LED");
+    // coordinator.Attach(&led2, "LED");
+    // coordinator.Attach(&led3, "LED");
 
-    coordinator.Attach(&lcd1, "LCD");
-    coordinator.Attach(&lcd2, "LCD");
-    coordinator.Attach(&lcd3, "LCD");
+    // coordinator.Attach(&lcd1, "LCD");
+    // coordinator.Attach(&lcd2, "LCD");
+    // coordinator.Attach(&lcd3, "LCD");
 
-    coordinator.Attach(&buzzer1, "BUZZ");
-    coordinator.Attach(&motor1, "MOT");
-    coordinator.Attach(&us1, "US");
+    // coordinator.Attach(&buzzer1, "BUZZ");
+    // coordinator.Attach(&motor1, "MOT");
+    coordinator.Attach(&us1, ULTRASOUND_BASE_ID);
+    coordinator.Attach(&us2, ULTRASOUND_BASE_ID);
 
-    coordinator.Attach(&eyes1, "EYES");
-    coordinator.Attach(&eyes1, "GAZE");
+    // coordinator.Attach(&eyes1, "EYES");
+    // coordinator.Attach(&eyes1, "GAZE");
 
     coordinator.printAllObservers();
 
@@ -62,21 +68,22 @@ void setup()
     // -----------------------------------------------------------------------
     Serial.println("========== SANITY TESTS ==========");
 
-    led1.sanityTest();
-    led2.sanityTest();
-    led3.sanityTest();
+    // led1.sanityTest();
+    // led2.sanityTest();
+    // led3.sanityTest();
 
-    lcd1.sanityTest();
-    lcd2.sanityTest();
-    lcd3.sanityTest();
+    // lcd1.sanityTest();
+    // lcd2.sanityTest();
+    // lcd3.sanityTest();
 
-    buzzer1.sanityTest();
+    // buzzer1.sanityTest();
 
-    motor1.sanityTest();
+    // motor1.sanityTest();
 
     us1.sanityTest();
+    us2.sanityTest();
 
-    eyes1.sanityTest();
+    // eyes1.sanityTest();
 
     Serial.println("========== TESTS COMPLETE ==========");
     Serial.println("[Setup] Ready. Waiting for commands...");
@@ -99,5 +106,5 @@ void loop()
         us1.measure();
     }
 
-    eyes1.redraw();
+    // eyes1.redraw();
 }
