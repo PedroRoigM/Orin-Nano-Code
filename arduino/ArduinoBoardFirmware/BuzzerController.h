@@ -2,7 +2,6 @@
 #define BUZZER_CONTROLLER_H
 
 #include "GeneralController.h"
-#include "PinDeclaration.h"
 
 // Observer for "BUZZ" messages.
 // Message format: "<freq>,<duration_ms>" or "OFF"

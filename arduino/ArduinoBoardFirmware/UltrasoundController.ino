@@ -31,7 +31,7 @@ void UltrasoundController::sanityTest()
 void UltrasoundController::measure()
 {
     long distanceCm = readDistanceCm();
-    sendToSerial(String(distanceCm));
+    sendToSerial(String(ULTRASOUND_DISTANCE_MEASURED_PREFIX) + " | " + String(distanceCm));
 }
 
 void UltrasoundController::Update(const String &message)

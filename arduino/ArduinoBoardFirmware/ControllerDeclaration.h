@@ -3,7 +3,7 @@
 
 // Central include that brings in every controller class.
 // Include this file anywhere you need access to all controllers.
-
+#include "CommunicationPortocolDeclaration.h"
 #include "ObserverPatternDelcaration.h"
 #include "GeneralController.h"
 #include "LedController.h"

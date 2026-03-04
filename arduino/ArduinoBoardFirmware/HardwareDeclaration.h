@@ -1,5 +1,12 @@
-#ifndef PIN_DECLARATION_H
-#define PIN_DECLARATION_H
+#ifndef HARDWARE_DECLARATION_H
+#define HARDWARE_DECLARATION_H
+
+#define MAX_LED_OBSERVERS 2
+#define MAX_LCD_OBSERVERS 0
+#define MAX_BUZZER_OBSERVERS 0
+#define MAX_MOTOR_OBSERVERS 4
+#define MAX_ULTRASOUND_OBSERVERS 2
+#define MAX_EYES_OBSERVERS 2
 
 // ---------------------------------------------------------------------------
 // LED Pins (adjust to match your wiring)
@@ -31,6 +38,9 @@ const int PIN_MOTOR_1_EN = 7;
 // ---------------------------------------------------------------------------
 // Ultrasound Sensor Pins (HC-SR04)
 // ---------------------------------------------------------------------------
+#define ULTRADOUNS_1_ID "US_1"
+#define ULTRADOUNS_1_ECHO_PIN 2
+#define ULTRADOUNS_1_TRIG_PIN 3
 const int PIN_ULTRASOUND_TRIG = 9;
 const int PIN_ULTRASOUND_ECHO = 10;
 
@@ -40,6 +50,5 @@ const int PIN_ULTRASOUND_ECHO = 10;
 #define PIN_EYES_CS_RIGHT 9
 #define PIN_EYES_DC 8
 #define PIN_EYES_RST 7
-#define MAX_EYES_OBSERVERS 1
 
 #endif // PIN_DECLARATION_H

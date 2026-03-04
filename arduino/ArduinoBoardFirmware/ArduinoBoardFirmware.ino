@@ -9,7 +9,6 @@
 //   US:PING
 
 #include "ControllerDeclaration.h"
-#include "PinDeclaration.h"
 
 // ---------------------------------------------------------------------------
 // Hardware instances

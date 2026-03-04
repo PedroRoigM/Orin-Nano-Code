@@ -2,7 +2,6 @@
 #define LCD_CONTROLLER_H
 
 #include "GeneralController.h"
-#include "PinDeclaration.h"
 #include <LiquidCrystal_I2C.h>
 
 // Observer for "LCD" messages. Any string payload is displayed on the LCD.

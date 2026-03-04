@@ -5,15 +5,6 @@
 #include <Vector.h>
 
 // ---------------------------------------------------------------------------
-// Per-type maximum observer counts (adjust per hardware configuration)
-// ---------------------------------------------------------------------------
-#define MAX_LED_OBSERVERS         10
-#define MAX_LCD_OBSERVERS         10
-#define MAX_BUZZER_OBSERVERS      10
-#define MAX_MOTOR_OBSERVERS       10
-#define MAX_ULTRASOUND_OBSERVERS  10
-
-// ---------------------------------------------------------------------------
 // IObserver
 // ---------------------------------------------------------------------------
 /**

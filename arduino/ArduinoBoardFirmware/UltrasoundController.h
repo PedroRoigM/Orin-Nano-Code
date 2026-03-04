@@ -2,7 +2,6 @@
 #define ULTRASOUND_CONTROLLER_H
 
 #include "GeneralController.h"
-#include "PinDeclaration.h"
 
 // Observer for "US" messages. Also actively measures and reports distance.
 // Message format: "PING" => triggers a single measurement

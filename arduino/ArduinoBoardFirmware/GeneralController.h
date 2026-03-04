@@ -2,6 +2,8 @@
 #define GENERAL_CONTROLLER_H
 
 #include "ObserverPatternDelcaration.h"
+#include "HardwareDeclaration.h"
+#include "CommunicationPortocolDeclaration.h"
 
 // ---------------------------------------------------------------------------
 // GeneralController — base class for all hardware controllers.
