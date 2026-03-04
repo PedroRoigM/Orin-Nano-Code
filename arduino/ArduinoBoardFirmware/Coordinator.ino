@@ -79,8 +79,6 @@ void Coordinator::Notify(const String &type, const String &message)
 // ---------------------------------------------------------------------------
 void Coordinator::readAndRoute()
 {
-    if (!Serial.available())
-        return;
 
     String baseId, specificId, command;
 

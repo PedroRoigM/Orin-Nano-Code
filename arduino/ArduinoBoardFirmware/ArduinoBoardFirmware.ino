@@ -47,7 +47,6 @@ void setup()
 
     coordinator.Attach(&led1, LED_BASE_ID);
     coordinator.Attach(&led2, LED_BASE_ID);
-    // coordinator.Attach(&led3, "LED");
 
     // coordinator.Attach(&lcd1, "LCD");
     // coordinator.Attach(&lcd2, "LCD");
