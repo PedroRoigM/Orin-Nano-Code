@@ -7,21 +7,22 @@ Controla las pantallas oculares GC9A01 conectadas al Arduino
 El Arduino gestiona las pantallas GC9A01 directamente por SPI local;
 el Jetson le envía comandos de alto nivel vía el bus serial compartido.
 
-Protocolo texto (newline-terminado):
+Hardware: Arduino Elegoo Mega 2560
+  GC9A01 pines: RST=47, CS=48, DC=49, SDA(MOSI)=51, SCL(SCLK)=52
 
-  EYES:<emotion>,<r>,<g>,<b>,<squint>,<wide>\\n
+Protocolo texto (newline-terminado) — formato {BASE}:{ID}:{COMMAND}:
+
+  EYES:EYES_1:<emotion>,<r>,<g>,<b>,<squint>,<wide>\\n
       Actualiza color de iris y morfología del párpado.
       · squint y wide: enteros 0-100 (float × 100).
       · Solo se envía cuando cambia la emoción.
+      Respuesta: EYES_1:IRIS:ok
 
-  GAZE:<gx>,<gy>\\n
+  GAZE:EYES_1:<gx>,<gy>\\n
       Actualiza la dirección de la mirada.
       · gx, gy: enteros −100..+100 (float × 100, normalizado −1..+1).
       · Rate-limitado a GAZE_UPDATE_HZ Hz para no saturar el bus a 9 600 baud.
-
-Respuesta del Arduino (ignorada en Python, solo logging si verbose=True):
-  EYES_ACK:ok
-  GAZE_ACK:ok
+      Respuesta: EYES_1:GAZE:ok
 
 Ejemplo de uso:
     eyes = EyesController(shared_port, verbose=True)
@@ -130,9 +131,12 @@ class EyesController:
 
     # ── Interno ───────────────────────────────────────────────────────────────
 
-    def _send(self, cmd_type: str, payload: str) -> None:
-        """Envía un comando al Arduino y lo loguea si verbose=True."""
-        line = f"{cmd_type}:{payload}"
+    # ID de componente en el protocolo {BASE}:{ID}:{CMD}
+    _COMPONENT_ID = "EYES_1"
+
+    def _send(self, base_id: str, payload: str) -> None:
+        """Envía un comando al Arduino en formato BASE:EYES_1:payload\\n."""
+        line = f"{base_id}:{self._COMPONENT_ID}:{payload}"
         if self._verbose:
             print(f"[SERIAL →] {line}")
         try:

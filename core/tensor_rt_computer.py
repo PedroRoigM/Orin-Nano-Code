@@ -39,6 +39,7 @@ from time import time
 
 from processing.emotion_color_mapper  import EmotionColorMapper
 from controllers.gc9a01_controller    import EyeRenderer, IRIS_COLOR_RGB, EYE_PARAMS
+from controllers.eyes_controller      import EyesController
 from companion_behavior               import BehaviorEngine, BEHAVIOR
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -60,7 +61,7 @@ OUTPUT_PATH           = "output.mp4"
 EMOTIONS = ["neutral", "happiness", "surprise", "sadness",
             "anger",   "disgust",   "fear",     "contempt"]
 
-ARDUINO_PORT         = "/dev/ttyACM0"   # Linux/Jetson; en Mac: "/dev/cu.usbmodemXXXX"
+ARDUINO_PORT         = "/dev/cu.usbmodem2101"   # Linux/Jetson; en Mac: "/dev/cu.usbmodemXXXX"
 ARDUINO_BAUD         = 9600
 ULTRASONIC_THRESHOLD = 10.0
 
@@ -107,31 +108,44 @@ emotionMapper = EmotionColorMapper()
 # ---------------------------------------------------------------------------
 # MockArduino — simula la placa e imprime todos los comandos por terminal
 # ---------------------------------------------------------------------------
+class _PrintPort:
+    """
+    Puerto serial simulado para MockArduino.
+    Redirige send_line() a stdout con el prefijo [SERIAL →].
+    Permite reutilizar los controladores reales (EyesController, etc.)
+    sin hardware, manteniendo toda la lógica del protocolo en un único lugar.
+    """
+    def send_line(self, line: str) -> None:
+        print(f"[SERIAL →] {line}")
+
+
 class MockArduino:
     """
     Reemplaza ArduinoController cuando no hay hardware conectado.
     Imprime en terminal cada comando que se enviaría al puerto serial,
-    con el formato exacto del protocolo Arduino (TIPO:PAYLOAD\\n).
-    Útil para validar el comportamiento médico sin necesidad de hardware.
+    con el formato exacto del protocolo — {BASE}:{ID}:{CMD}.
+
+    arduino.eyes usa EyesController real con _PrintPort, de modo que
+    toda la lógica del protocolo vive en el controlador, no aquí.
     """
 
     class _Leds:
-        def on(self):           print("[SERIAL →] LED:ON")
-        def off(self):          print("[SERIAL →] LED:OFF")
-        def blink(self):        print("[SERIAL →] LED:BLINK")
-        def flash_alert(self):  print("[SERIAL →] LED:BLINK  ← alerta")
+        def on(self):           print("[SERIAL →] LED:LED_1:ON")
+        def off(self):          print("[SERIAL →] LED:LED_1:OFF")
+        def blink(self):        print("[SERIAL →] LED:LED_1:BLINK")
+        def flash_alert(self):  print("[SERIAL →] LED:LED_1:BLINK  ← alerta")
 
     class _Buzzer:
         def tone(self, freq: int, ms: int):
-            print(f"[SERIAL →] BUZZ:{freq},{ms}")
+            print(f"[SERIAL →] BUZZ:BUZZ_1:{freq},{ms}")
         def off(self):
-            print("[SERIAL →] BUZZ:OFF")
+            print("[SERIAL →] BUZZ:BUZZ_1:OFF")
         def beep(self, freq: int = 1000, duration_ms: int = 200):
-            print(f"[SERIAL →] BUZZ:{freq},{duration_ms}")
+            print(f"[SERIAL →] BUZZ:BUZZ_1:{freq},{duration_ms}")
         def startup_chime(self):
             import time
             for freq in (440, 660, 880):
-                print(f"[SERIAL →] BUZZ:{freq},120")
+                print(f"[SERIAL →] BUZZ:BUZZ_1:{freq},120")
                 time.sleep(0.14)
         def react_to_emotion(self, emotion: str):
             _TONES = {
@@ -141,99 +155,56 @@ class MockArduino:
                 "fear": (800, 80),     "contempt": (300, 250),
             }
             f, d = _TONES.get(emotion, (440, 100))
-            print(f"[SERIAL →] BUZZ:{f},{d}  ← emoción={emotion}")
+            print(f"[SERIAL →] BUZZ:BUZZ_1:{f},{d}  ← emoción={emotion}")
         def react_to_obstacle(self, distance_cm: float, threshold_cm: float = 10.0):
             if distance_cm < 0 or distance_cm >= threshold_cm:
                 return
             ratio = max(0.0, min(1.0, distance_cm / threshold_cm))
             freq  = int(500 + (1 - ratio) * 1500)
             dur   = int(50  + ratio * 150)
-            print(f"[SERIAL →] BUZZ:{freq},{dur}  ← obstáculo {distance_cm:.1f}cm")
+            print(f"[SERIAL →] BUZZ:BUZZ_1:{freq},{dur}  ← obstáculo {distance_cm:.1f}cm")
 
     class _Lcd:
         def display_text(self, text: str, line: int = 0, col: int = 0):
-            print(f"[SERIAL →] LCD:{str(text)[:16]}")
+            print(f"[SERIAL →] LCD:LCD_1:{str(text)[:16]}")
         def display_two_lines(self, top: str, bottom: str):
             combined = f"{top[:8]} {bottom[:7]}"
-            print(f"[SERIAL →] LCD:{combined}")
+            print(f"[SERIAL →] LCD:LCD_1:{combined}")
         def display_emotion(self, emotion: str, confidence: float):
-            print(f"[SERIAL →] LCD:{emotion[:10]} {confidence:.0%}")
+            print(f"[SERIAL →] LCD:LCD_1:{emotion[:10]} {confidence:.0%}")
         def display_distance(self, cm: float):
             if cm < 0:
-                print("[SERIAL →] LCD:US: sin dato")
+                print("[SERIAL →] LCD:LCD_1:US: sin dato")
             else:
-                print(f"[SERIAL →] LCD:US: {cm:.1f} cm")
+                print(f"[SERIAL →] LCD:LCD_1:US: {cm:.1f} cm")
         def clear(self):
-            print("[SERIAL →] LCD: ")
+            print("[SERIAL →] LCD:LCD_1: ")
 
     class _Tank:
-        def stop(self, **_):                     print("[SERIAL →] MOT:STOP,0")
-        def forward(self, speed, **_):           print(f"[SERIAL →] MOT:FWD,{speed}")
-        def backward(self, speed, **_):          print(f"[SERIAL →] MOT:REV,{speed}")
-        def turn_left(self, speed, **_):         print(f"[SERIAL →] MOT:REV,{speed}  ← giro izq")
-        def turn_right(self, speed, **_):        print(f"[SERIAL →] MOT:FWD,{speed}  ← giro der")
+        def stop(self, **_):               print("[SERIAL →] MOT:MOT_1:STOP")
+        def forward(self, speed, **_):     print(f"[SERIAL →] MOT:MOT_1:FWD,{speed}")
+        def backward(self, speed, **_):    print(f"[SERIAL →] MOT:MOT_1:REV,{speed}")
+        def turn_left(self, speed, **_):   print(f"[SERIAL →] MOT:MOT_1:REV,{speed}  ← giro izq")
+        def turn_right(self, speed, **_):  print(f"[SERIAL →] MOT:MOT_1:FWD,{speed}  ← giro der")
 
     class _Ultrasonic:
         @property
-        def distance_cm(self) -> float:  return -1.0
+        def distance_cm(self) -> float:      return -1.0
         @property
-        def is_front_blocked(self) -> bool: return False
+        def is_front_blocked(self) -> bool:  return False
         @property
-        def is_blocked(self) -> bool:    return False
-
-    class _MockEyes:
-        """
-        Simula EyesController — imprime [SERIAL →] EYES y GAZE al terminal.
-        Terminal-friendly: GAZE se imprime a 2 Hz (el EyesController real usa 20 Hz).
-        """
-        _GAZE_HZ = 2   # impresión reducida para no saturar el terminal
-
-        def __init__(self):
-            self._last_emotion = ""
-            self._last_gaze_t  = 0.0
-
-        def update(self, gaze_x, gaze_y, emotion, confidence=1.0,
-                   iris_color_override=None):
-            import time as _t
-            # EYES — solo si cambia la emoción
-            if emotion != self._last_emotion:
-                self._last_emotion = emotion
-                beh = BEHAVIOR.get(emotion, BEHAVIOR.get("neutral", {}))
-                if iris_color_override is not None:
-                    r, g, b = (int(c) for c in iris_color_override)
-                else:
-                    rgb = beh.get("eyes_rgb", (200, 200, 180))
-                    r, g, b = int(rgb[0]), int(rgb[1]), int(rgb[2])
-                squint = int(beh.get("eyes_squint", 0.0) * 100)
-                wide   = int(beh.get("eyes_wide",   0.0) * 100)
-                print(f"[SERIAL →] EYES:{emotion},{r},{g},{b},{squint},{wide}")
-
-            # GAZE — rate-limitado (terminal-friendly)
-            now = _t.monotonic()
-            if now - self._last_gaze_t >= 1.0 / self._GAZE_HZ:
-                self._last_gaze_t = now
-                gx = int(max(-100, min(100, round(gaze_x * 100))))
-                gy = int(max(-100, min(100, round(gaze_y * 100))))
-                print(f"[SERIAL →] GAZE:{gx},{gy}")
-
-        def set_idle(self):
-            if self._last_emotion != "no_face":
-                self._last_emotion = "no_face"
-                beh = BEHAVIOR.get("no_face", {})
-                rgb    = beh.get("eyes_rgb", (200, 200, 180))
-                squint = int(beh.get("eyes_squint", 0.25) * 100)
-                wide   = int(beh.get("eyes_wide",   0.00) * 100)
-                r, g, b = int(rgb[0]), int(rgb[1]), int(rgb[2])
-                print(f"[SERIAL →] EYES:no_face,{r},{g},{b},{squint},{wide}")
-            print("[SERIAL →] GAZE:0,0")
+        def is_blocked(self) -> bool:        return False
 
     def __init__(self) -> None:
-        self.leds       = self._Leds()
-        self.buzzer     = self._Buzzer()
-        self.lcd        = self._Lcd()
-        self.tank       = self._Tank()
-        self.ultrasonic = self._Ultrasonic()
-        self.eyes       = self._MockEyes()
+        self.leds        = self._Leds()
+        self.buzzer      = self._Buzzer()
+        self.lcd         = self._Lcd()
+        self.tank        = self._Tank()
+        self.ultrasonic  = self._Ultrasonic()
+        # EyesController real con puerto de impresión:
+        # toda la lógica del protocolo (EYES:EYES_1:... / GAZE:EYES_1:...)
+        # vive en EyesController, no duplicada aquí.
+        self.eyes        = EyesController(_PrintPort(), verbose=False)
         self.on_obstacle = None
 
     @property
