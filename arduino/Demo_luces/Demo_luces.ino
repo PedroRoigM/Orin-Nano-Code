@@ -1,7 +1,7 @@
 #include <Adafruit_NeoPixel.h>
 
 #define PIN        6
-#define NUMPIXELS  7
+#define NUMPIXELS  34
 #define BRIGHTNESS 50
 
 Adafruit_NeoPixel strip(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
@@ -32,7 +32,7 @@ uint8_t boundColor(int value) {
 
 void randomizeColors() {
   r = boundColor(r + random(-10, 11));
-  g = boundColor(g + ranpdom(-10, 11));
+  g = boundColor(g + random(-10, 11));
   b = boundColor(b + random(-10, 11));
 }
 

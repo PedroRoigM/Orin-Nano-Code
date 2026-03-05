@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arduino Communication Test</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Arduino Protocol Master 🛠️</h1>
+            <p>Test and debug your hardware communication protocol in real-time.</p>
+        </header>
+
+        <section class="connection-panel card">
+            <h2>Connection</h2>
+            <div class="input-group">
+                <select id="port-select">
+                    <option value="">Select Port</option>
+                </select>
+                <button id="refresh-ports" class="btn-secondary">Refresh</button>
+                <button id="connect-btn" class="btn-primary">Connect</button>
+                <button id="disconnect-btn" class="btn-danger" disabled>Disconnect</button>
+            </div>
+            <div id="connection-status" class="status-indicator">Disconnected</div>
+        </section>
+
+        <main class="dashboard">
+            <div class="controls-grid">
+                <!-- LED Control -->
+                <div class="card component-card" data-base-id="LED">
+                    <h3>LED Control (NeoPixel)</h3>
+                    <div class="input-row">
+                        <label>ID:</label>
+                        <input type="text" value="LED_1" id="led-id">
+                    </div>
+                    <div class="input-row">
+                        <label>Color:</label>
+                        <input type="color" id="led-color-picker" value="#ffffff">
+                    </div>
+                    <div class="btn-group">
+                        <button onclick="sendCommand('LED', 'led-id', 'ON')">ON</button>
+                        <button onclick="sendCommand('LED', 'led-id', 'OFF')">OFF</button>
+                        <button onclick="sendCommand('LED', 'led-id', 'BLINK')">BLINK</button>
+                    </div>
+                    <div class="btn-group" style="margin-top: 0.5rem;">
+                        <button onclick="sendLedColorCommand()" class="btn-primary">Set Color</button>
+                        <button onclick="sendLedRandomCommand()" class="btn-secondary">Random</button>
+                    </div>
+                </div>
+
+                <!-- LCD Control -->
+                <div class="card component-card" data-base-id="LCD">
+                    <h3>LCD Control</h3>
+                    <div class="input-row">
+                        <label>ID:</label>
+                        <input type="text" value="LCD_1" id="lcd-id">
+                    </div>
+                    <div class="input-row">
+                        <label>Text:</label>
+                        <input type="text" placeholder="Enter message..." id="lcd-text">
+                    </div>
+                    <button class="btn-block" onclick="sendLCDCommand()">Display Text</button>
+                </div>
+
+                <!-- Buzzer Control -->
+                <div class="card component-card" data-base-id="BUZZ">
+                    <h3>Buzzer Control</h3>
+                    <div class="input-row">
+                        <label>ID:</label>
+                        <input type="text" value="BUZZ_1" id="buzz-id">
+                    </div>
+                    <div class="input-row">
+                        <label>Freq/Dur:</label>
+                        <input type="text" placeholder="1000,500" id="buzz-params">
+                    </div>
+                    <div class="btn-group">
+                        <button onclick="sendBuzzerCommand()">Play Tone</button>
+                        <button onclick="sendCommand('BUZZ', 'buzz-id', 'OFF')" class="btn-secondary">OFF</button>
+                    </div>
+                </div>
+
+                <!-- Motor Control -->
+                <div class="card component-card" data-base-id="MOT">
+                    <h3>Motor Control</h3>
+                    <div class="input-row">
+                        <label>ID:</label>
+                        <input type="text" value="MOT_1" id="mot-id">
+                    </div>
+                    <div class="input-row">
+                        <label>Speed (0-255):</label>
+                        <input type="number" value="150" min="0" max="255" id="mot-speed">
+                    </div>
+                    <div class="btn-group">
+                        <button onclick="sendMotorCommand('FWD')">FWD</button>
+                        <button onclick="sendMotorCommand('REV')">REV</button>
+                        <button onclick="sendCommand('MOT', 'mot-id', 'STOP')" class="btn-danger">STOP</button>
+                    </div>
+                </div>
+
+                <!-- Ultrasound Control -->
+                <div class="card component-card" data-base-id="US">
+                    <h3>Ultrasound Controller</h3>
+                    <div class="input-row">
+                        <label>ID:</label>
+                        <input type="text" value="US_1" id="us-id">
+                    </div>
+                    <button class="btn-block" onclick="sendCommand('US', 'us-id', 'PING')">PING (Distance)</button>
+                </div>
+
+                <!-- Eyes Control -->
+                <div class="card component-card" data-base-id="EYES">
+                    <h3>Eyes / Gaze</h3>
+                    <div class="input-row">
+                        <label>ID:</label>
+                        <input type="text" value="EYES_1" id="eyes-id">
+                    </div>
+                    <div class="tabs">
+                        <button class="tab-btn active" onclick="showTab('iris')">Iris</button>
+                        <button class="tab-btn" onclick="showTab('gaze')">Gaze</button>
+                    </div>
+                    <div id="iris-tab" class="tab-content active">
+                        <input type="text" placeholder="happy,255,200,0,10,0" id="eyes-iris">
+                        <button class="btn-block" onclick="sendEyesCommand()">Set Iris</button>
+                    </div>
+                    <div id="gaze-tab" class="tab-content">
+                        <input type="text" placeholder="30,-10" id="eyes-gaze">
+                        <button class="btn-block" onclick="sendGazeCommand()">Set Gaze</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="terminal-panel card">
+                <div class="terminal-header">
+                    <h3>Live Output</h3>
+                    <button id="clear-terminal" class="btn-small">Clear</button>
+                </div>
+                <div id="terminal" class="terminal-body">
+                    <div class="system-msg">App ready. Select a port to start.</div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

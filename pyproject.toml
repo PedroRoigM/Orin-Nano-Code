@@ -15,3 +15,10 @@ dependencies = [
     "torch>=2.10.0",
     "transformers>=5.2.0",
 ]
+
+[dependency-groups]
+dev = [
+    "flask>=3.1.0",
+    "flask-socketio>=5.5.1",
+    "eventlet>=0.39.0", # Highly recommended for flask-socketio
+]
