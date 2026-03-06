@@ -1,6 +1,6 @@
 #include <Adafruit_NeoPixel.h>
 
-#define PIN        6
+#define PIN        23
 #define NUMPIXELS  34
 #define BRIGHTNESS 50
 

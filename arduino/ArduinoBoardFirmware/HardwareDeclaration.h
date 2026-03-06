@@ -54,9 +54,9 @@
 // ---------------------------------------------------------------------------
 // Ultrasound Sensor Pins  (HC-SR04 × 2, Mega pins 37-40)
 // ---------------------------------------------------------------------------
-#define ULTRASOUND_1_ECHO_PIN  37
+#define ULTRASOUND_1_ECHO_PIN  39
 #define ULTRASOUND_1_TRIG_PIN  38
-#define ULTRASOUND_2_ECHO_PIN  39
+#define ULTRASOUND_2_ECHO_PIN  41
 #define ULTRASOUND_2_TRIG_PIN  40
 
 // ---------------------------------------------------------------------------

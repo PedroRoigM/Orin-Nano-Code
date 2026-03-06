@@ -27,9 +27,6 @@ def read_from_serial():
                     data = serial_port.read(serial_port.in_waiting)
                     text = data.decode('utf-8', errors='replace')
                     
-                    # Log to server console for debugging
-                    print(f"Serial Read: {repr(text)}")
-                    
                     # Split by lines in case multiple messages arrived
                     lines = text.splitlines()
                     for line in lines:
@@ -56,7 +53,7 @@ def connect():
     global serial_port, read_thread, running
     data = request.json
     port_name = data.get('port')
-    baudrate = data.get('baudrate', 115200)
+    baudrate = data.get('baudrate', 9600)
 
     try:
         if serial_port and serial_port.is_open:

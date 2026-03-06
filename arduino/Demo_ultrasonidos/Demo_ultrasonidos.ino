@@ -1,8 +1,8 @@
-const int trigPin_1 = 2;
-const int echoPin_1 = 3;
+const int trigPin_1 = 38;
+const int echoPin_1 =39;
 
-const int trigPin_2 = 5;
-const int echoPin_2 = 4;
+const int trigPin_2 = 40;
+const int echoPin_2 = 41;
 
 float duration, distance;
 
@@ -36,6 +36,7 @@ void loop()
 
   duration = pulseIn(echoPin_2, HIGH);
   distance = (duration * .0343) / 2;
-
+  Serial.print("US 2: ");
+  Serial.println(distance);
   delay(1000);
 }
