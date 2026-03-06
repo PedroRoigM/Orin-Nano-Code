@@ -61,7 +61,7 @@ OUTPUT_PATH           = "output.mp4"
 EMOTIONS = ["neutral", "happiness", "surprise", "sadness",
             "anger",   "disgust",   "fear",     "contempt"]
 
-ARDUINO_PORT         = '/dev/cu.usbmodem2101'          # None = auto-detectar; o forzar: "/dev/cu.usbmodemXXXX"
+ARDUINO_PORT         = 'COM13'          # None = auto-detectar; o forzar: "/dev/cu.usbmodemXXXX"
 ARDUINO_BAUD         = 9600
 ULTRASONIC_THRESHOLD = 10.0
 
