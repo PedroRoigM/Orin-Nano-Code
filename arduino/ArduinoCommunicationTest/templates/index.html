@@ -40,6 +40,11 @@
                         <label>Color:</label>
                         <input type="color" id="led-color-picker" value="#ffffff">
                     </div>
+                    <div class="input-row">
+                        <label>Brightness:</label>
+                        <input type="range" id="led-brightness" min="0" max="255" value="50" oninput="updateBrightnessLabel(this.value)">
+                        <span id="brightness-val">50</span>
+                    </div>
                     <div class="btn-group">
                         <button onclick="sendCommand('LED', 'led-id', 'ON')">ON</button>
                         <button onclick="sendCommand('LED', 'led-id', 'OFF')">OFF</button>
@@ -47,7 +52,7 @@
                     </div>
                     <div class="btn-group" style="margin-top: 0.5rem;">
                         <button onclick="sendLedColorCommand()" class="btn-primary">Set Color</button>
-                        <button onclick="sendLedRandomCommand()" class="btn-secondary">Random</button>
+                        <button onclick="sendLedBrightnessCommand()" class="btn-secondary">Set Brightness</button>
                     </div>
                 </div>
 
@@ -122,11 +127,39 @@
                         <button class="tab-btn" onclick="showTab('gaze')">Gaze</button>
                     </div>
                     <div id="iris-tab" class="tab-content active">
-                        <input type="text" placeholder="happy,255,200,0,10,0" id="eyes-iris">
-                        <button class="btn-block" onclick="sendEyesCommand()">Set Iris</button>
+                        <div class="input-row">
+                            <label>Emotion:</label>
+                            <select id="eyes-emotion">
+                                <option value="happy">Happy</option>
+                                <option value="sad">Sad</option>
+                                <option value="angry">Angry</option>
+                                <option value="surprised">Surprised</option>
+                                <option value="neutral">Neutral</option>
+                            </select>
+                        </div>
+                        <div class="input-row">
+                            <label>Iris Color:</label>
+                            <input type="color" id="eyes-color" value="#b4b4c8">
+                        </div>
+                        <div class="input-row">
+                            <label>Squint:</label>
+                            <input type="range" id="eyes-squint" min="0" max="100" value="0">
+                        </div>
+                        <div class="input-row">
+                            <label>Wide:</label>
+                            <input type="range" id="eyes-wide" min="0" max="100" value="0">
+                        </div>
+                        <button class="btn-block" onclick="sendEyesCommand()">Set Eyes</button>
                     </div>
                     <div id="gaze-tab" class="tab-content">
-                        <input type="text" placeholder="30,-10" id="eyes-gaze">
+                        <div class="input-row">
+                            <label>Gaze X (-100 to 100):</label>
+                            <input type="number" id="gaze-x" value="0" min="-100" max="100">
+                        </div>
+                        <div class="input-row">
+                            <label>Gaze Y (-100 to 100):</label>
+                            <input type="number" id="gaze-y" value="0" min="-100" max="100">
+                        </div>
                         <button class="btn-block" onclick="sendGazeCommand()">Set Gaze</button>
                     </div>
                 </div>

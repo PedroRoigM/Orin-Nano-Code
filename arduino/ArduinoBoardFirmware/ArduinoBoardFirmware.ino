@@ -68,29 +68,14 @@ void setup()
     // -----------------------------------------------------------------------
     // Sanity tests — exercise each controller once and report to Serial
     // -----------------------------------------------------------------------
-    Serial.println("========== SANITY TESTS ==========");
+    GeneralController* controllers[] = {
+        &led1, &led2, &buzzer1, &buzzer2, &us1, &us2, &eyeLeft, &eyeRight
+    };
+    int numControllers = sizeof(controllers) / sizeof(controllers[0]);
+    
+    sanityTest(controllers, numControllers);
 
-    led1.sanityTest();
-    led2.sanityTest();
-    // led3.sanityTest();
-
-    // lcd1.sanityTest();
-    // lcd2.sanityTest();
-    // lcd3.sanityTest();
-
-    buzzer1.sanityTest();
-    buzzer2.sanityTest();
-
-    // motor1.sanityTest();
-
-    us1.sanityTest();
-    us2.sanityTest();
-
-    eyeLeft.sanityTest();
-    eyeRight.sanityTest();
-
-    Serial.println("========== TESTS COMPLETE ==========");
-    Serial.println("[Setup] Ready. Waiting for commands...");
+    Serial.println(F("[Setup] Ready. Waiting for commands..."));
 }
 
 // ---------------------------------------------------------------------------

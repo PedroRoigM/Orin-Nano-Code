@@ -6,7 +6,7 @@
 // ---------------------------------------------------------------------------
 #define MAX_LED_OBSERVERS        2
 #define MAX_LCD_OBSERVERS        0
-#define MAX_BUZZER_OBSERVERS     1
+#define MAX_BUZZER_OBSERVERS     2
 #define MAX_MOTOR_OBSERVERS      4
 #define MAX_ULTRASOUND_OBSERVERS 2
 #define MAX_EYES_OBSERVERS       2

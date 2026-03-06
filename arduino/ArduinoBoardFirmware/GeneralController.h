@@ -19,6 +19,9 @@ public:
 
     // Subclasses must implement Update()
     virtual void Update(const String &message) override = 0;
+    
+    // Every controller should implement a sanity test
+    virtual void sanityTest() = 0;
 
 protected:
     // Subclasses override parseMessage() for payload-specific logic

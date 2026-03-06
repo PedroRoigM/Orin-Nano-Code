@@ -40,7 +40,7 @@ connectBtn.onclick = async () => {
     const response = await fetch('/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ port, baudrate: 9600 })
+        body: JSON.stringify({ port, baudrate: 115200 })
     });
 
     const result = await response.json();
@@ -78,6 +78,10 @@ document.getElementById('clear-terminal').onclick = () => {
     terminal.innerHTML = '';
 };
 
+function updateBrightnessLabel(val) {
+    document.getElementById('brightness-val').textContent = val;
+}
+
 // Command Sending
 async function sendCommand(baseId, idElement, command) {
     const specificId = document.getElementById(idElement).value;
@@ -110,6 +114,11 @@ function sendLedColorCommand() {
     sendCommand('LED', 'led-id', `COLOR:${r},${g},${b}`);
 }
 
+function sendLedBrightnessCommand() {
+    const brightness = document.getElementById('led-brightness').value;
+    sendCommand('LED', 'led-id', `BRIGHTNESS:${brightness}`);
+}
+
 function sendLedRandomCommand() {
     sendCommand('LED', 'led-id', 'RANDOM');
 }
@@ -122,7 +131,7 @@ function sendLCDCommand() {
 
 function sendBuzzerCommand() {
     const params = document.getElementById('buzz-params').value;
-    sendCommand('BUZZ', 'buzz-id', params);
+    sendCommand('BUZZ', 'buzz-id', `SOUND:${params}`);
 }
 
 function sendMotorCommand(dir) {
@@ -131,13 +140,23 @@ function sendMotorCommand(dir) {
 }
 
 function sendEyesCommand() {
-    const params = document.getElementById('eyes-iris').value;
-    sendCommand('EYES', 'eyes-id', params);
+    const emotion = document.getElementById('eyes-emotion').value;
+    const color = document.getElementById('eyes-color').value;
+    const r = parseInt(color.substr(1, 2), 16);
+    const g = parseInt(color.substr(3, 2), 16);
+    const b = parseInt(color.substr(5, 2), 16);
+    const squint = document.getElementById('eyes-squint').value;
+    const wide = document.getElementById('eyes-wide').value;
+
+    // Format: <emotion>,<r>,<g>,<b>, <squint>, <wide>
+    const payload = `${emotion},${r},${g},${b},${squint},${wide}`;
+    sendCommand('EYES', 'eyes-id', payload);
 }
 
 function sendGazeCommand() {
-    const params = document.getElementById('eyes-gaze').value;
-    sendCommand('GAZE', 'eyes-id', params);
+    const x = document.getElementById('gaze-x').value;
+    const y = document.getElementById('gaze-y').value;
+    sendCommand('GAZE', 'eyes-id', `${x},${y}`);
 }
 
 // UI Helpers
