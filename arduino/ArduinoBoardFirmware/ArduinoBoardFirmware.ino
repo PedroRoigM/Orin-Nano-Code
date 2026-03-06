@@ -30,8 +30,8 @@ BuzzerController buzzer2(BUZZER_ID(2), PIN_BUZZER_2);
 UltrasoundController us1(ULTRASOUND_ID(1), ULTRASOUND_1_TRIG_PIN, ULTRASOUND_1_ECHO_PIN);
 UltrasoundController us2(ULTRASOUND_ID(2), ULTRASOUND_2_TRIG_PIN, ULTRASOUND_2_ECHO_PIN);
 
-EyeController eyeLeft(EYE_ID(1), PIN_EYES_CS_LEFT, PIN_EYES_DC, PIN_EYES_RST, PIN_EYES_MOSI, PIN_EYES_SCK, false);
-EyeController eyeRight(EYE_ID(2), PIN_EYES_CS_RIGHT, PIN_EYES_DC, PIN_EYES_RST, PIN_EYES_MOSI, PIN_EYES_SCK, true);
+EyeController eyeLeft(EYE_ID(1), PIN_EYES_CS_RIGHT, PIN_EYES_DC, PIN_EYES_RST, PIN_EYES_MOSI, PIN_EYES_SCK, false);
+EyeController eyeRight(EYE_ID(2), PIN_EYES_CS_RIGHT, PIN_EYES_DC, PIN_EYES_RST, PIN_EYES_MOSI, PIN_EYES_SCK, false);
 
 // ---------------------------------------------------------------------------
 // Coordinator
@@ -43,7 +43,7 @@ Coordinator coordinator;
 // ---------------------------------------------------------------------------
 void setup()
 {
-    Serial.begin(9600);
+    Serial.begin(115200);
     Wire.begin();
 
     coordinator.Attach(&led1, LED_BASE_ID);
@@ -72,7 +72,7 @@ void setup()
     // Sanity tests — exercise each controller once and report to Serial
     // -----------------------------------------------------------------------
     GeneralController* controllers[] = {
-        &led1, &led2, &buzzer1, &buzzer2, &us1, &us2, &eyeLeft, &eyeRight
+        &led1, &led2, &buzzer1, &buzzer2, &us1, &us2, &eyeLeft
     };
     int numControllers = sizeof(controllers) / sizeof(controllers[0]);
     

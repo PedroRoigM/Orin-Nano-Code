@@ -62,7 +62,7 @@ EMOTIONS = ["neutral", "happiness", "surprise", "sadness",
             "anger",   "disgust",   "fear",     "contempt"]
 
 ARDUINO_PORT         = 'COM13'          # None = auto-detectar; o forzar: "/dev/cu.usbmodemXXXX"
-ARDUINO_BAUD         = 9600
+ARDUINO_BAUD         = 115200
 ULTRASONIC_THRESHOLD = 10.0
 
 EYE_DISPLAY_SIZE = 240   # tamaño del cuadrado donde se renderiza cada ojo

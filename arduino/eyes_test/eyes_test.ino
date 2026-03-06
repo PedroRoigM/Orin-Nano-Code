@@ -20,19 +20,23 @@
 // ─── Geometría ───────────────────────────────────────────────────────────────
 #define CX          120     // centro pantalla
 #define CY          120
-#define BALL_R       35     // radio del iris
-#define BALL_R2    1225L    // 35²
-#define PUPIL_R      14     // radio de la pupila (~40 % del iris)
-#define PUPIL_R2    196L    // 14²
-#define HIGHL_R       3     // radio del punto de luz (reflejo)
-#define HIGHL_OX     12     // offset X del reflejo desde centro del iris
-#define HIGHL_OY     12     // offset Y del reflejo (hacia arriba)
-#define MAX_GAZE     80     // px máx. desplazamiento desde centro
+#define BALL_R       60     // radio del iris (más grande)
+#define BALL_R2    3600L    // 60²
+#define PUPIL_R      28     // radio de la pupila
+#define PUPIL_R2    784L    // 28²
+#define HIGHL_R       5     // radio del punto de luz principal
+#define HIGHL_OX     20     // offset X
+#define HIGHL_OY     20     // offset Y
+#define HIGHL2_R      3     // segundo brillo más pequeño
+#define HIGHL2_OX   -10     // abajo a la izquierda
+#define HIGHL2_OY   -12
+#define MAX_GAZE     45     // Reducido para evitar salirse demasiado con ojos grandes
 
 // ─── Estado objetivo (actualizado por serial) ────────────────────────────────
 static uint8_t s_r = 60,  s_g = 150, s_b = 240;
 static int     s_gx = 0,  s_gy = 0;
 static bool    s_new_cmd = false;   // true cada vez que llega un EYE válido
+static unsigned long s_last_serial_task = 0;
 
 // ─── Estado actualmente dibujado ─────────────────────────────────────────────
 static int     d_cx = CX, d_cy = CY;
@@ -42,37 +46,54 @@ static uint8_t d_r  = 0,  d_g  = 0,  d_b  = 0;   // distintos de s_* → fuerza 
 // Calculadas una sola vez en setup(); eliminan la multiplicación 32-bit por píxel.
 static uint8_t circ_span[BALL_R  + 1];   // iris
 static uint8_t pupl_span[PUPIL_R + 1];   // pupila
-// Semiancho del reflejo (radio 3) — fijo, no requiere RAM dinámica
-static const uint8_t HIGHL_SPAN[HIGHL_R + 1] = {3, 3, 2, 1};
+// Semiancho del reflejo
+static const uint8_t HIGHL_SPAN[6] = {5, 5, 4, 4, 3, 2};
+static const uint8_t HIGHL2_SPAN[4] = {3, 3, 2, 1};
 
 // ─── Helper RGB565 ───────────────────────────────────────────────────────────
 static inline uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
     return ((uint16_t)(r >> 3) << 11) | ((uint16_t)(g >> 2) << 5) | (b >> 3);
 }
 
-// ─── SPI bajo nivel ──────────────────────────────────────────────────────────
+// ─── Fast I/O Macros (Mega 2560 Port L) ──────────────────────────────────────
+// Pin 48 (CS) -> PL1, Pin 47 (DC) -> PL2, Pin 46 (RST) -> PL3
+#define CS_LOW()  (PORTL &= ~_BV(1))
+#define CS_HIGH() (PORTL |=  _BV(1))
+#define DC_LOW()  (PORTL &= ~_BV(2))
+#define DC_HIGH() (PORTL |=  _BV(2))
+
+// ─── SPI bajo nivel (Optimized) ──────────────────────────────────────────────
 static void gc_cmd(uint8_t cmd) {
-    digitalWrite(PIN_DC, LOW);  digitalWrite(PIN_CS, LOW);
-    SPI.transfer(cmd);
-    digitalWrite(PIN_CS, HIGH);
+    DC_LOW(); CS_LOW();
+    SPDR = cmd; while (!(SPSR & _BV(SPIF)));
+    CS_HIGH();
 }
 static void gc_dat1(uint8_t d) {
-    digitalWrite(PIN_DC, HIGH); digitalWrite(PIN_CS, LOW);
-    SPI.transfer(d);
-    digitalWrite(PIN_CS, HIGH);
+    DC_HIGH(); CS_LOW();
+    SPDR = d; while (!(SPSR & _BV(SPIF)));
+    CS_HIGH();
 }
 static void gc_datn(const uint8_t* d, uint8_t n) {
-    digitalWrite(PIN_DC, HIGH); digitalWrite(PIN_CS, LOW);
-    while (n--) SPI.transfer(*d++);
-    digitalWrite(PIN_CS, HIGH);
+    DC_HIGH(); CS_LOW();
+    while (n--) {
+        SPDR = *d++;
+        while (!(SPSR & _BV(SPIF)));
+    }
+    CS_HIGH();
 }
 static void setWindow(int x0, int y0, int x1, int y1) {
     gc_cmd(0x2A);
-    uint8_t xa[] = { 0, (uint8_t)x0, 0, (uint8_t)x1 };
-    gc_datn(xa, 4);
+    DC_HIGH(); CS_LOW();
+    SPDR = 0; while (!(SPSR & _BV(SPIF))); SPDR = (uint8_t)x0; while (!(SPSR & _BV(SPIF)));
+    SPDR = 0; while (!(SPSR & _BV(SPIF))); SPDR = (uint8_t)x1; while (!(SPSR & _BV(SPIF)));
+    CS_HIGH();
+
     gc_cmd(0x2B);
-    uint8_t ya[] = { 0, (uint8_t)y0, 0, (uint8_t)y1 };
-    gc_datn(ya, 4);
+    DC_HIGH(); CS_LOW();
+    SPDR = 0; while (!(SPSR & _BV(SPIF))); SPDR = (uint8_t)y0; while (!(SPSR & _BV(SPIF)));
+    SPDR = 0; while (!(SPSR & _BV(SPIF))); SPDR = (uint8_t)y1; while (!(SPSR & _BV(SPIF)));
+    CS_HIGH();
+    
     gc_cmd(0x2C);
 }
 
@@ -84,14 +105,15 @@ static void fillRect(int x0, int y0, int x1, int y1, uint16_t col) {
     setWindow(x0, y0, x1, y1);
     uint8_t hi = col >> 8, lo = col & 0xFF;
     uint32_t n = (uint32_t)(x1 - x0 + 1) * (y1 - y0 + 1);
-    digitalWrite(PIN_DC, HIGH); digitalWrite(PIN_CS, LOW);
-    while (n--) { SPI.transfer(hi); SPI.transfer(lo); }
-    digitalWrite(PIN_CS, HIGH);
+    DC_HIGH(); CS_LOW();
+    while (n--) {
+        SPDR = hi; while (!(SPSR & _BV(SPIF)));
+        SPDR = lo; while (!(SPSR & _BV(SPIF)));
+    }
+    CS_HIGH();
 }
 
 // ─── drawBall — iris + pupila, union bounding box, sin parpadeo ──────────────
-// Un solo stream SPI. Por fila: fondo | iris-izq | pupila | iris-der | fondo.
-// Filas fuera de la pupila usan solo 3 segmentos (igual que antes).
 static void drawBall(int new_cx, int new_cy, uint16_t col) {
     int x0 = min(d_cx, new_cx) - BALL_R - 1;
     int y0 = min(d_cy, new_cy) - BALL_R - 1;
@@ -102,15 +124,14 @@ static void drawBall(int new_cx, int new_cy, uint16_t col) {
 
     uint8_t hi = col >> 8, lo = col & 0xFF;
     setWindow(x0, y0, x1, y1);
-    digitalWrite(PIN_DC, HIGH); digitalWrite(PIN_CS, LOW);
+    DC_HIGH(); CS_LOW();
 
     for (int py = y0; py <= y1; py++) {
         int ady = py - new_cy;
         if (ady < 0) ady = -ady;
 
         if (ady > BALL_R) {
-            // Fuera del iris — fila entera negra
-            for (int px = x0; px <= x1; px++) {
+            for (int px = x1 - x0 + 1; px > 0; px--) {
                 SPDR = 0; while (!(SPSR & _BV(SPIF)));
                 SPDR = 0; while (!(SPSR & _BV(SPIF)));
             }
@@ -120,7 +141,6 @@ static void drawBall(int new_cx, int new_cy, uint16_t col) {
             int cr = new_cx + xs; if (cr > x1) cr = x1;
 
             if (ady <= PUPIL_R) {
-                // Fila con pupila: 5 segmentos
                 uint8_t ps = pupl_span[ady];
                 int pl = new_cx - ps; if (pl < x0) pl = x0;
                 int pr = new_cx + ps; if (pr > x1) pr = x1;
@@ -131,44 +151,56 @@ static void drawBall(int new_cx, int new_cy, uint16_t col) {
                 for (int px = pr+1;  px <= cr; px++) { SPDR = hi; while (!(SPSR & _BV(SPIF))); SPDR = lo; while (!(SPSR & _BV(SPIF))); }
                 for (int px = cr+1;  px <= x1; px++) { SPDR = 0;  while (!(SPSR & _BV(SPIF))); SPDR = 0;  while (!(SPSR & _BV(SPIF))); }
             } else {
-                // Fila solo con iris: 3 segmentos
                 for (int px = x0;   px <  cl; px++) { SPDR = 0;  while (!(SPSR & _BV(SPIF))); SPDR = 0;  while (!(SPSR & _BV(SPIF))); }
                 for (int px = cl;   px <= cr; px++) { SPDR = hi; while (!(SPSR & _BV(SPIF))); SPDR = lo; while (!(SPSR & _BV(SPIF))); }
                 for (int px = cr+1; px <= x1; px++) { SPDR = 0;  while (!(SPSR & _BV(SPIF))); SPDR = 0;  while (!(SPSR & _BV(SPIF))); }
             }
         }
     }
-    digitalWrite(PIN_CS, HIGH);
+    CS_HIGH();
 }
 
 // ─── drawHighlight — punto de luz blanco en el iris ──────────────────────────
-// Círculo pequeño (radio 3) en la esquina superior-derecha del iris.
-// Llamar DESPUÉS de drawBall; usa el mismo color del iris para el relleno exterior.
-static void drawHighlight(int cx, int cy, uint8_t hi, uint8_t lo) {
-    int hx = cx + HIGHL_OX;
-    int hy = cy - HIGHL_OY;
+static void drawHighlight(int cx, int cy, uint16_t irisCol) {
+    uint8_t hi = irisCol >> 8, lo = irisCol & 0xFF;
+    
+    // Highlight 1 (Grande)
+    int hx = cx + HIGHL_OX, hy = cy - HIGHL_OY;
     int x0 = hx - HIGHL_R, x1 = hx + HIGHL_R;
     int y0 = hy - HIGHL_R, y1 = hy + HIGHL_R;
     if (x0 < 0) x0 = 0; if (y0 < 0) y0 = 0;
     if (x1 > 239) x1 = 239; if (y1 > 239) y1 = 239;
-
     setWindow(x0, y0, x1, y1);
-    digitalWrite(PIN_DC, HIGH); digitalWrite(PIN_CS, LOW);
+    DC_HIGH(); CS_LOW();
     for (int py = y0; py <= y1; py++) {
         int ady = py - hy; if (ady < 0) ady = -ady;
-        uint8_t xs = HIGHL_SPAN[ady];
+        uint8_t xs = (ady < 6) ? HIGHL_SPAN[ady] : 0;
         int hl = hx - xs, hr = hx + xs;
         for (int px = x0; px <= x1; px++) {
-            if (px >= hl && px <= hr) {
-                SPDR = 0xFF; while (!(SPSR & _BV(SPIF)));
-                SPDR = 0xFF; while (!(SPSR & _BV(SPIF)));
-            } else {
-                SPDR = hi; while (!(SPSR & _BV(SPIF)));
-                SPDR = lo; while (!(SPSR & _BV(SPIF)));
-            }
+            if (px >= hl && px <= hr) { SPDR = 0xFF; while (!(SPSR & _BV(SPIF))); SPDR = 0xFF; while (!(SPSR & _BV(SPIF))); }
+            else { SPDR = hi; while (!(SPSR & _BV(SPIF))); SPDR = lo; while (!(SPSR & _BV(SPIF))); }
         }
     }
-    digitalWrite(PIN_CS, HIGH);
+    CS_HIGH();
+
+    // Highlight 2 (Pequeño / Brillo secundario "cute")
+    hx = cx + HIGHL2_OX; hy = cy - HIGHL2_OY;
+    x0 = hx - HIGHL2_R; x1 = hx + HIGHL2_R;
+    y0 = hy - HIGHL2_R; y1 = hy + HIGHL2_R;
+    if (x0 < 0) x0 = 0; if (y0 < 0) y0 = 0;
+    if (x1 > 239) x1 = 239; if (y1 > 239) y1 = 239;
+    setWindow(x0, y0, x1, y1);
+    DC_HIGH(); CS_LOW();
+    for (int py = y0; py <= y1; py++) {
+        int ady = py - hy; if (ady < 0) ady = -ady;
+        uint8_t xs = (ady < 4) ? HIGHL2_SPAN[ady] : 0;
+        int hl = hx - xs, hr = hx + xs;
+        for (int px = x0; px <= x1; px++) {
+            if (px >= hl && px <= hr) { SPDR = 0xFF; while (!(SPSR & _BV(SPIF))); SPDR = 0xFF; while (!(SPSR & _BV(SPIF))); }
+            else { SPDR = hi; while (!(SPSR & _BV(SPIF))); SPDR = lo; while (!(SPSR & _BV(SPIF))); }
+        }
+    }
+    CS_HIGH();
 }
 
 // ─── Init GC9A01 ─────────────────────────────────────────────────────────────
@@ -255,14 +287,13 @@ static void parseLine(const char* line) {
     const char* payload = p2 + 1;
 
     if (strncmp(line, "EYE", 3) == 0) {
-        // EYE:EYES_1:gx,gy,r,g,b
         const char* c = payload;
         int raw_gx = nextInt(c);
         int raw_gy = nextInt(c);
         int raw_r  = nextInt(c);
         int raw_g  = nextInt(c);
         int raw_b  = nextInt(c);
-        s_gx    = constrain(raw_gx, -100, 100);
+        s_gx    = constrain(-raw_gx, -100, 100);
         s_gy    = constrain(raw_gy, -100, 100);
         s_r     = (uint8_t)constrain(raw_r, 0, 255);
         s_g     = (uint8_t)constrain(raw_g, 0, 255);
@@ -288,16 +319,12 @@ static void readSerial() {
             s_buf[s_buf_len++] = c;
         }
     }
-    if (s_buf_len > 0 && (millis() - s_last_rx) > 80UL) {
-        processBuffer();
-    }
 }
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 void setup() {
-    Serial.begin(9600);
+    Serial.begin(115200);
 
-    // Precalcular semiancho por fila para iris y pupila
     for (uint8_t dy = 0; dy <= BALL_R; dy++) {
         long dy2 = (long)dy * dy;
         circ_span[dy] = (dy2 > BALL_R2)  ? 0 : (uint8_t)sqrt((float)(BALL_R2  - dy2));
@@ -312,7 +339,7 @@ void setup() {
     pinMode(PIN_DC,  OUTPUT);
     pinMode(LED_BUILTIN, OUTPUT);
 
-    digitalWrite(PIN_CS, HIGH);
+    digitalWrite(PIN_CS, HIGH); // Will be overridden by port macros later
     digitalWrite(PIN_DC, HIGH);
 
     SPI.begin();
@@ -325,20 +352,32 @@ void setup() {
     digitalWrite(LED_BUILTIN, HIGH);
 }
 
-// ─── Loop ────────────────────────────────────────────────────────────────────
+// ─── Loop (High Frequency) ───────────────────────────────────────────────────
+static float f_cx = CX, f_cy = CY;
+
 void loop() {
+    // Lectura constante sin bloqueos
     readSerial();
 
-    if (!s_new_cmd) return;
-    s_new_cmd = false;
+    // Actualización de posición con suavizado (Interpolación)
+    int target_cx = CX + (int)((long)s_gx * MAX_GAZE / 100);
+    int target_cy = CY + (int)((long)s_gy * MAX_GAZE / 100);
+    
+    // Suavizado para 60 FPS visuales
+    f_cx += ((float)target_cx - f_cx) * 0.3f;
+    f_cy += ((float)target_cy - f_cy) * 0.3f;
+    
+    int icx = (int)f_cx;
+    int icy = (int)f_cy;
 
-    int new_cx = CX + (int)((long)s_gx * MAX_GAZE / 100);
-    int new_cy = CY + (int)((long)s_gy * MAX_GAZE / 100);
-
-    uint16_t col = rgb565(s_r, s_g, s_b);
-    drawBall(new_cx, new_cy, col);
-    drawHighlight(new_cx, new_cy, col >> 8, col & 0xFF);
-
-    d_cx = new_cx; d_cy = new_cy;
-    d_r  = s_r;    d_g  = s_g;    d_b  = s_b;
+    if (icx != d_cx || icy != d_cy || s_new_cmd) {
+        s_new_cmd = false;
+        uint16_t col = rgb565(s_r, s_g, s_b);
+        drawBall(icx, icy, col);
+        drawHighlight(icx, icy, col);
+        d_cx = icx; d_cy = icy;
+        d_r = s_r; d_g = s_g; d_b = s_b;
+    }
 }
+
+

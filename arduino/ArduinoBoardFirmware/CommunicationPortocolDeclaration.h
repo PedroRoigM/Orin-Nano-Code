@@ -120,8 +120,13 @@
 //                 (mapped internally to ±MAX_GAZE pixels)
 //       <r/g/b> : iris colour, 0-255 each
 //
+//   EYE:EYE_<n>:COLOR:<r>,<g>,<b>
+//   EYE:EYE_<n>:SHAPE:<type>   (circle, star, smiley, x)
+//
 // Example:
 //   EYE:EYE_1:30,-10,255,200,0
+//   EYE:EYE_1:COLOR:255,0,0
+//   EYE:EYE_1:SHAPE:star
 //
 // Outcome:
 //   EYE_<n>:READY:ok
@@ -131,6 +136,8 @@
 #define EYE_ID(num) EYE_BASE_ID "_" #num
 #define EYE_PREFIX "EYE"
 #define EYE_READY_PREFIX "READY"
+#define EYE_CMD_COLOR "COLOR"
+#define EYE_CMD_SHAPE "SHAPE"
 
 // ---------------------------------------------------------------------------
 
