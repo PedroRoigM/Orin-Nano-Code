@@ -23,6 +23,15 @@ warn() { echo -e "${YEL}[WARN]${NC} $*"; }
 fail() { echo -e "${RED}[FAIL]${NC} $*"; }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 0. Pinmux — configurar pines DC (18) y RST (22) como salida
+#    Por defecto la Orin Nano los deja como INPUT hasta configurar el device tree
+# ─────────────────────────────────────────────────────────────────────────────
+echo ""
+echo "=== Configurando pinmux GPIO ==="
+sudo busybox devmem 0x243D010 w 0x5 && ok "Pin 18 (DC)  → OUTPUT" || warn "Pin 18 (DC)  — fallo al configurar pinmux"
+sudo busybox devmem 0x243D000 w 0x5 && ok "Pin 22 (RST) → OUTPUT" || warn "Pin 22 (RST) — fallo al configurar pinmux"
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 1. Entorno virtual
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
