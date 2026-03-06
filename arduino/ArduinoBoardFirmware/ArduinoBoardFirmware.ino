@@ -30,8 +30,8 @@ BuzzerController buzzer2(BUZZER_ID(2), PIN_BUZZER_2);
 UltrasoundController us1(ULTRASOUND_ID(1), ULTRASOUND_1_TRIG_PIN, ULTRASOUND_1_ECHO_PIN);
 UltrasoundController us2(ULTRASOUND_ID(2), ULTRASOUND_2_TRIG_PIN, ULTRASOUND_2_ECHO_PIN);
 
-EyeController eyeLeft(EYES_ID(1), PIN_EYES_CS_LEFT, PIN_EYES_DC, PIN_EYES_RST, PIN_EYES_MOSI, PIN_EYES_SCK, false);
-EyeController eyeRight(EYES_ID(2), PIN_EYES_CS_RIGHT, PIN_EYES_DC, PIN_EYES_RST, PIN_EYES_MOSI, PIN_EYES_SCK, true);
+EyeController eyeLeft(EYE_ID(1), PIN_EYES_CS_LEFT, PIN_EYES_DC, PIN_EYES_RST, PIN_EYES_MOSI, PIN_EYES_SCK, false);
+EyeController eyeRight(EYE_ID(2), PIN_EYES_CS_RIGHT, PIN_EYES_DC, PIN_EYES_RST, PIN_EYES_MOSI, PIN_EYES_SCK, true);
 
 // ---------------------------------------------------------------------------
 // Coordinator
@@ -60,10 +60,13 @@ void setup()
     coordinator.Attach(&us1, ULTRASOUND_BASE_ID);
     coordinator.Attach(&us2, ULTRASOUND_BASE_ID);
 
-    coordinator.Attach(&eyeLeft, EYES_BASE_ID);
-    coordinator.Attach(&eyeRight, EYES_BASE_ID);
+    coordinator.Attach(&eyeLeft, EYE_BASE_ID);
+    coordinator.Attach(&eyeRight, EYE_BASE_ID);
 
     coordinator.printAllObservers();
+
+    eyeLeft.begin();
+    eyeRight.begin();
 
     // -----------------------------------------------------------------------
     // Sanity tests — exercise each controller once and report to Serial

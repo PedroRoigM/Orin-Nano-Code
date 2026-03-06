@@ -114,39 +114,23 @@
 // ---------------------------------------------------------------------------
 // Eyes (GC9A01 × 2)
 // ---------------------------------------------------------------------------
-// The Eyes controller is registered under TWO base IDs: "EYES" and "GAZE".
-// The Update() method auto-detects which sub-protocol to use based on the
-// first character of the payload (letter → EYES, digit or '-' → GAZE).
-//
-// ── EYES sub-protocol ──
 // Income:
-//   EYES:EYES_<n>:<emotion>,<r>,<g>,<b>,<squint>,<wide>
-//       <emotion>  : arbitrary label string (ignored by firmware, kept for readability)
-//       <r/g/b>    : iris colour, 0-255 each
-//       <squint>   : upper-eyelid coverage, 0 (open) – 100 (half-closed)
-//       <wide>     : reserved wide-eye parameter, 0-100
-// Example:
-//   EYES:EYES_1:happy,255,200,0,10,0
-//
-// Outcome:
-//   EYES_<n>:IRIS:ok
-//
-// ── GAZE sub-protocol ──
-// Income:
-//   GAZE:EYES_<n>:<gx>,<gy>
+//   EYE:EYE_<n>:<gx>,<gy>,<r>,<g>,<b>
 //       <gx/gy> : gaze offset, -100 to +100
-//                 (mapped internally to ±EYE_GAZE_MAX pixels)
+//                 (mapped internally to ±MAX_GAZE pixels)
+//       <r/g/b> : iris colour, 0-255 each
+//
 // Example:
-//   GAZE:EYES_1:30,-10
+//   EYE:EYE_1:30,-10,255,200,0
 //
 // Outcome:
-//   EYES_<n>:GAZE:ok
+//   EYE_<n>:READY:ok
+//   EYE_<n>:EYE:ok
 
-#define EYES_BASE_ID "EYES"
-#define EYES_GAZE_BASE_ID "GAZE"
-#define EYES_ID(num) EYES_BASE_ID "_" #num
-#define EYES_IRIS_PREFIX "IRIS"
-#define EYES_GAZE_PREFIX "GAZE"
+#define EYE_BASE_ID "EYE"
+#define EYE_ID(num) EYE_BASE_ID "_" #num
+#define EYE_PREFIX "EYE"
+#define EYE_READY_PREFIX "READY"
 
 // ---------------------------------------------------------------------------
 

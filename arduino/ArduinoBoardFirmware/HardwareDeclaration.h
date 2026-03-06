@@ -64,9 +64,9 @@
 // ---------------------------------------------------------------------------
 #define PIN_EYES_MOSI      51
 #define PIN_EYES_SCK       52
-#define PIN_EYES_CS_LEFT   53
-#define PIN_EYES_CS_RIGHT  49
-#define PIN_EYES_DC        48
-#define PIN_EYES_RST       47
+#define PIN_EYES_CS_LEFT   49  
+#define PIN_EYES_CS_RIGHT  48
+#define PIN_EYES_DC        47
+#define PIN_EYES_RST       46
 
 #endif // HARDWARE_DECLARATION_H

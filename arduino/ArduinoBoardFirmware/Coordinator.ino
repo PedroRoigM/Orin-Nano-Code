@@ -211,7 +211,7 @@ Vector<IObserver *> *Coordinator::listForType(const String &type)
         return &_motorObservers;
     if (type == ULTRASOUND_BASE_ID)
         return &_ultrasoundObservers;
-    if (type == EYES_BASE_ID)
+    if (type == EYE_BASE_ID)
         return &_eyesObservers;
 
     return nullptr;

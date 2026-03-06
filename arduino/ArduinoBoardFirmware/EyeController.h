@@ -1,24 +1,27 @@
 #ifndef EYE_CONTROLLER_H
 #define EYE_CONTROLLER_H
 
-#include <Adafruit_GFX.h>
-#include <Adafruit_GC9A01A.h>
 #include "GeneralController.h"
+#include <SPI.h>
 
-// ── Eye Geometry (px on 240x240 display) ──────────────────────────
-static constexpr uint8_t EYE_SCLERA_R = 95; // sclera radius
-static constexpr uint8_t EYE_IRIS_R = 40;   // iris radius
-static constexpr uint8_t EYE_PUPIL_R = 18;  // pupil radius
-static constexpr uint8_t EYE_GAZE_MAX = 38; // max gaze offset (px)
-static constexpr uint8_t EYE_CX = 120;
-static constexpr uint8_t EYE_CY = 120;
+// ─── Geometría (matching eyes_test.ino) ──────────────────────────────────────
+#define BALL_R       35     // radio del iris
+#define BALL_R2    1225L    // 35²
+#define PUPIL_R      14     // radio de la pupila (~40 % del iris)
+#define PUPIL_R2    196L    // 14²
+#define HIGHL_R       3     // radio del punto de luz (reflejo)
+#define HIGHL_OX     12     // offset X del reflejo desde centro del iris
+#define HIGHL_OY     12     // offset Y del reflejo (hacia arriba)
+#define MAX_GAZE     80     // px máx. desplazamiento desde centro
+#define EYE_CX      120
+#define EYE_CY      120
 
 class EyeController : public GeneralController
 {
 public:
     EyeController(const String &id, int pinCs, int pinDc, int pinRst, int pinMosi, int pinSclk, bool mirrored = false);
 
-    void sanityTest();
+    void sanityTest() override;
     void Update(const String &message) override;
     void redraw();
     void begin();
@@ -27,24 +30,36 @@ protected:
     void parseMessage(const String &message) override;
 
 private:
-    Adafruit_GC9A01A _disp;
-    int _pinRst;
+    int _pinCs, _pinDc, _pinRst;
     bool _mirrored;
 
-    // Eye state
-    uint16_t _irisColor; // RGB565
-    int _gazeX;          // -EYE_GAZE_MAX .. +EYE_GAZE_MAX (px)
-    int _gazeY;
-    int _squint;         // 0-100
-    int _wide;           // 0-100
-    bool _needRedraw;
+    // Estado objetivo
+    uint8_t _s_r, _s_g, _s_b;
+    int _s_gx, _s_gy;
+    bool _new_cmd;
 
-    void parseEyes(const String &payload);
-    void parseGaze(const String &payload);
-    void drawEye();
+    // Estado actualmente dibujado
+    int _d_cx, _d_cy;
+    uint8_t _d_r, _d_g, _d_b;
 
-    static uint16_t rgb888to565(uint8_t r, uint8_t g, uint8_t b);
-    static void hardwareReset(int pin);
+    // Tablas precalculadas
+    uint8_t _circ_span[BALL_R + 1];
+    uint8_t _pupl_span[PUPIL_R + 1];
+
+    void drawBall(int new_cx, int new_cy, uint16_t col);
+    void drawHighlight(int cx, int cy, uint8_t hi, uint8_t lo);
+    void initGC9A01();
+    
+    // Low-level SPI helpers
+    void gc_cmd(uint8_t cmd);
+    void gc_dat1(uint8_t d);
+    void gc_datn(const uint8_t* d, uint8_t n);
+    void setWindow(int x0, int y0, int x1, int y1);
+    void fillRect(int x0, int y0, int x1, int y1, uint16_t col);
+
+    static inline uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
+        return ((uint16_t)(r >> 3) << 11) | ((uint16_t)(g >> 2) << 5) | (b >> 3);
+    }
 };
 
 #endif // EYE_CONTROLLER_H

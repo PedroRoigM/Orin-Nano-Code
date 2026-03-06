@@ -13,9 +13,9 @@
 #include <SPI.h>
 
 // ─── Pines ───────────────────────────────────────────────────────────────────
-#define PIN_RST 47
+#define PIN_RST 46
 #define PIN_CS  48
-#define PIN_DC  49
+#define PIN_DC  47
 
 // ─── Geometría ───────────────────────────────────────────────────────────────
 #define CX          120     // centro pantalla
