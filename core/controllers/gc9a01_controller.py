@@ -341,7 +341,8 @@ class GC9A01Controller:
         self._verbose       = verbose
         self._last_emotion  = ""     # último estado logueado (para no repetir en cada frame)
         self._renderer = EyeRenderer()
-        self._spi      = None
+        self._spi_l    = None
+        self._spi_r    = None
         self._running  = False
         self._thread   = None
 
@@ -353,21 +354,20 @@ class GC9A01Controller:
         for pin in (self._dc, self._rst, self._bl_l, self._bl_r):
             GPIO.setup(pin, GPIO.OUT, initial=GPIO.HIGH)
 
-        self._spi = spidev.SpiDev()
-        self._spi.open(self._spi_bus, self._cs_l)
-        self._spi.max_speed_hz = SPI_SPEED_HZ
-        self._spi.mode = 0
-        self._spi.no_cs = True  # Gestionamos CS manualmente para dos pantallas
+        # Dos instancias SpiDev independientes — el kernel gestiona CS0 y CS1
+        self._spi_l = spidev.SpiDev()
+        self._spi_l.open(self._spi_bus, self._cs_l)
+        self._spi_l.max_speed_hz = SPI_SPEED_HZ
+        self._spi_l.mode = 0
 
-        # Necesitamos también controlar CS_R manualmente — configurar sus pines
-        self._cs_l_gpio = 24   # BOARD pin 24 = SPI0_CS0
-        self._cs_r_gpio = 26   # BOARD pin 26 = SPI0_CS1
-        GPIO.setup(self._cs_l_gpio, GPIO.OUT, initial=GPIO.HIGH)
-        GPIO.setup(self._cs_r_gpio, GPIO.OUT, initial=GPIO.HIGH)
+        self._spi_r = spidev.SpiDev()
+        self._spi_r.open(self._spi_bus, self._cs_r)
+        self._spi_r.max_speed_hz = SPI_SPEED_HZ
+        self._spi_r.mode = 0
 
         self._reset()
-        self._init_display(self._cs_l_gpio)
-        self._init_display(self._cs_r_gpio)
+        self._init_display(self._spi_l)
+        self._init_display(self._spi_r)
 
         self._running = True
         self._thread  = threading.Thread(target=self._render_loop, daemon=True)
@@ -379,11 +379,12 @@ class GC9A01Controller:
         self._running = False
         if self._thread:
             self._thread.join(timeout=2.0)
-        if self._spi:
+        if self._spi_l:
             blank = np.zeros((self.DISPLAY_SIZE, self.DISPLAY_SIZE, 3), dtype=np.uint8)
-            self._send_frame(blank, self._cs_l_gpio)
-            self._send_frame(blank, self._cs_r_gpio)
-            self._spi.close()
+            self._send_frame(blank, self._spi_l)
+            self._send_frame(blank, self._spi_r)
+            self._spi_l.close()
+            self._spi_r.close()
         GPIO.cleanup()
         print("[GC9A01] Detenido.")
 
@@ -486,8 +487,8 @@ class GC9A01Controller:
                                           params["squint"], params["wide"],
                                           mirrored=True)
 
-            self._send_frame(left,  self._cs_l_gpio)
-            self._send_frame(right, self._cs_r_gpio)
+            self._send_frame(left,  self._spi_l)
+            self._send_frame(right, self._spi_r)
 
             sleep = self._frame_dt - (time.time() - t0)
             if sleep > 0:
@@ -495,25 +496,21 @@ class GC9A01Controller:
 
     # ── Hardware: SPI ─────────────────────────────────────────────────────────
 
-    def _write_cmd(self, cmd: int, cs_gpio: int) -> None:
+    def _write_cmd(self, cmd: int, spi: "spidev.SpiDev") -> None:
         GPIO.output(self._dc, GPIO.LOW)
-        GPIO.output(cs_gpio, GPIO.LOW)
-        self._spi.writebytes([cmd])
-        GPIO.output(cs_gpio, GPIO.HIGH)
+        spi.writebytes([cmd])
 
-    def _write_data(self, data: bytes, cs_gpio: int) -> None:
+    def _write_data(self, data: bytes, spi: "spidev.SpiDev") -> None:
         GPIO.output(self._dc, GPIO.HIGH)
-        GPIO.output(cs_gpio, GPIO.LOW)
         CHUNK = 4096
         for i in range(0, len(data), CHUNK):
-            self._spi.writebytes2(data[i:i + CHUNK])
-        GPIO.output(cs_gpio, GPIO.HIGH)
+            spi.writebytes2(data[i:i + CHUNK])
 
-    def _init_display(self, cs_gpio: int) -> None:
+    def _init_display(self, spi: "spidev.SpiDev") -> None:
         for cmd, data, delay_ms in _INIT_SEQ:
-            self._write_cmd(cmd, cs_gpio)
+            self._write_cmd(cmd, spi)
             if data:
-                self._write_data(data, cs_gpio)
+                self._write_data(data, spi)
             if delay_ms:
                 time.sleep(delay_ms / 1000.0)
 
@@ -522,22 +519,22 @@ class GC9A01Controller:
         GPIO.output(self._rst, GPIO.LOW);  time.sleep(0.10)
         GPIO.output(self._rst, GPIO.HIGH); time.sleep(0.05)
 
-    def _set_window(self, x0: int, y0: int, x1: int, y1: int, cs_gpio: int) -> None:
-        self._write_cmd(0x2A, cs_gpio)
-        self._write_data(bytes([x0 >> 8, x0 & 0xFF, x1 >> 8, x1 & 0xFF]), cs_gpio)
-        self._write_cmd(0x2B, cs_gpio)
-        self._write_data(bytes([y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF]), cs_gpio)
-        self._write_cmd(0x2C, cs_gpio)
+    def _set_window(self, x0: int, y0: int, x1: int, y1: int, spi: "spidev.SpiDev") -> None:
+        self._write_cmd(0x2A, spi)
+        self._write_data(bytes([x0 >> 8, x0 & 0xFF, x1 >> 8, x1 & 0xFF]), spi)
+        self._write_cmd(0x2B, spi)
+        self._write_data(bytes([y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF]), spi)
+        self._write_cmd(0x2C, spi)
 
-    def _send_frame(self, img_bgr: np.ndarray, cs_gpio: int) -> None:
+    def _send_frame(self, img_bgr: np.ndarray, spi: "spidev.SpiDev") -> None:
         """Convierte imagen BGR (OpenCV) a RGB565 y la envía al display vía SPI."""
         r = img_bgr[:, :, 2].astype(np.uint16)
         g = img_bgr[:, :, 1].astype(np.uint16)
         b = img_bgr[:, :, 0].astype(np.uint16)
         rgb565 = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
         pixels = rgb565.flatten().byteswap().tobytes()  # big-endian para GC9A01
-        self._set_window(0, 0, 239, 239, cs_gpio)
-        self._write_data(pixels, cs_gpio)
+        self._set_window(0, 0, 239, 239, spi)
+        self._write_data(pixels, spi)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

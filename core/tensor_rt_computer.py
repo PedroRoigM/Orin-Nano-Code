@@ -54,14 +54,14 @@ args = parser.parse_args()
 # Configuración
 # ---------------------------------------------------------------------------
 FRAME_W, FRAME_H      = 640, 480
-CONF_THRESHOLD        = 0.90
+CONF_THRESHOLD        = 0.70
 DETECT_EVERY_N_FRAMES = 2
 OUTPUT_PATH           = "output.mp4"
 
 EMOTIONS = ["neutral", "happiness", "surprise", "sadness",
             "anger",   "disgust",   "fear",     "contempt"]
 
-ARDUINO_PORT         = "/dev/cu.usbmodem2101"   # Linux/Jetson; en Mac: "/dev/cu.usbmodemXXXX"
+ARDUINO_PORT         = '/dev/cu.usbmodem2101'          # None = auto-detectar; o forzar: "/dev/cu.usbmodemXXXX"
 ARDUINO_BAUD         = 9600
 ULTRASONIC_THRESHOLD = 10.0
 
@@ -222,12 +222,39 @@ class MockArduino:
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Detección automática del puerto Arduino
+# ---------------------------------------------------------------------------
+def _detect_arduino_port() -> str | None:
+    """Devuelve el puerto del Arduino o None si no se encuentra."""
+    if ARDUINO_PORT is not None:
+        return ARDUINO_PORT
+    try:
+        import serial.tools.list_ports
+        candidates = []
+        for p in serial.tools.list_ports.comports():
+            dev = p.device or ""
+            desc = (p.description or "").lower()
+            if ("arduino" in desc or "mega" in desc
+                    or "usbmodem" in dev or "ttyACM" in dev or "usbserial" in dev):
+                candidates.append(dev)
+        if candidates:
+            port = candidates[0]
+            print(f"[Arduino] Puerto auto-detectado: {port}")
+            return port
+    except Exception:
+        pass
+    return None
+
 # Arduino — real si está disponible, MockArduino en caso contrario
 # ---------------------------------------------------------------------------
 arduino: MockArduino | None = None
 try:
     from controllers.arduino_controller import ArduinoController
-    _hw = ArduinoController(ARDUINO_PORT, ARDUINO_BAUD, ULTRASONIC_THRESHOLD)
+    _port = _detect_arduino_port()
+    if _port is None:
+        raise RuntimeError("No se encontró ningún Arduino conectado por USB")
+    _hw = ArduinoController(_port, ARDUINO_BAUD, ULTRASONIC_THRESHOLD)
     _hw.start()
 
     def _on_obstacle(cm: float) -> None:
@@ -241,7 +268,7 @@ try:
     _hw.buzzer.startup_chime()
     _hw.leds.on()
     arduino = _hw   # type: ignore[assignment]
-    print("[Arduino] Hardware conectado en", ARDUINO_PORT)
+    print("[Arduino] Hardware conectado en", _port)
 
 except Exception as e:
     print(f"[Arduino] Hardware no disponible ({e})")
@@ -536,8 +563,13 @@ try:
                     gaze_y_v = (face_cy - FRAME_H / 2) / (FRAME_H / 2)
                     visual_eyes.update(gaze_x_v, gaze_y_v, emotion)
 
-        else:
-            # Sin cara
+        if frame_count % 30 == 0:
+            n_raw = len(boxes) if boxes is not None else 0
+            print(f"[Det] frame={frame_count} raw={n_raw} passed={face_count} "
+                  f"emotion={current_emotion} conf={current_conf:.0%}")
+
+        if face_count == 0:
+            # Sin cara detectada (boxes None o todas bajo el umbral)
             behavior.apply("no_face")
             visual_eyes.set_idle()
             r, g, b = behavior.get_led_strip_color("no_face")

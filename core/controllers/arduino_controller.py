@@ -34,6 +34,7 @@ Reacción automática al ultrasónico:
 
 import serial
 import threading
+import time
 from typing import Optional, Callable
 
 from controllers.shared_port          import SharedPort
@@ -76,6 +77,8 @@ class ArduinoController:
     ):
         # ── Puerto serial compartido ──────────────────────────────────────────
         self._ser        = serial.Serial(port_name, baudrate, timeout=1)
+        print(f"[Arduino] Puerto abierto — esperando reset del Arduino (2 s)…")
+        time.sleep(2.0)   # el DTR activa el reset del Arduino; esperar a que arranque
         self._write_lock = threading.Lock()
         self._port       = SharedPort(self._ser, self._write_lock)
 
@@ -93,7 +96,7 @@ class ArduinoController:
         self.leds   = LedController(self._port,    verbose=verbose)
         self.lcd    = LcdController(self._port,    verbose=verbose)
         self.buzzer = BuzzerController(self._port,  verbose=verbose)
-        self.eyes   = EyesController(self._port,   verbose=verbose)
+        self.eyes   = EyesController(self._port,   verbose=True)
 
         # ── Callback de obstáculo (opcional) ──────────────────────────────────
         # Asignar una función para reacción automática al sensor:

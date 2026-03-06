@@ -63,3 +63,14 @@ class SharedPort:
                 self._ser.flush()
         except serial.SerialException as exc:
             print(f"[SharedPort] Write error (binary): {exc}")
+
+
+if __name__ == "__main__":
+    import serial as _serial
+    # Abrir UNA SOLA vez — send_line cierra tras cada envío (DTR reset)
+    # Para pruebas usar conexión persistente directamente:
+    ser = _serial.Serial('/dev/cu.usbmodem2101', 9600, timeout=1)
+    write_lock = threading.Lock()
+    port = SharedPort(ser, write_lock)
+
+    port.send_line("EYE:EYES_1:50,0,255,0,0\n")

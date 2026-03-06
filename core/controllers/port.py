@@ -63,7 +63,7 @@ class Port:
         """
         _START = 64   # '@'
         _END   = 13   # CR
-        payload = bytes([_START] + data + [_END])
+        payload = data
         try:
             if not self.connection.is_open:
                 self.connection.open()
@@ -84,11 +84,17 @@ class Port:
 
 # ── Ejemplo de uso ─────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    p = Port('/dev/ttyACM0')
-    p.send_line("LED:ON")
-    sleep(1.0)
-    p.send_line("LED:OFF")
-    sleep(0.5)
-    p.send_line("LCD:Hola R2!")
-    sleep(0.5)
-    p.send_line("BUZZ:1000,200")
+    import serial as _serial
+    # Abrir UNA SOLA vez — send_line cierra tras cada envío (DTR reset)
+    # Para pruebas usar conexión persistente directamente:
+    ser = _serial.Serial('/dev/cu.usbmodem2101', 9600, timeout=1)
+    sleep(2)  # esperar reset del Arduino tras abrir el puerto
+    print("Arduino listo. Enviando comandos...")
+    for i in range(100):
+        cmd = f"EYE:EYES_1:{i % 100 - 50},0,255,0,0\n"
+        ser.write(cmd.encode('ascii'))
+        ser.flush()
+        print(f"→ {cmd.strip()}")
+        sleep(0.5)
+    ser.close()
+    
