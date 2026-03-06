@@ -6,7 +6,7 @@
 // ---------------------------------------------------------------------------
 #define MAX_LED_OBSERVERS        2
 #define MAX_LCD_OBSERVERS        0
-#define MAX_BUZZER_OBSERVERS     0
+#define MAX_BUZZER_OBSERVERS     1
 #define MAX_MOTOR_OBSERVERS      4
 #define MAX_ULTRASOUND_OBSERVERS 2
 #define MAX_EYES_OBSERVERS       2
@@ -27,9 +27,10 @@
 #define LCD_ROWS         2
 
 // ---------------------------------------------------------------------------
-// Buzzer Pin  (Mega pin 24)
+// Buzzer Pin  (Mega pin 8)
 // ---------------------------------------------------------------------------
-// #define PIN_BUZZER  24
+#define PIN_BUZZER_1  7
+#define PIN_BUZZER_2  6
 
 // ---------------------------------------------------------------------------
 // Motor Pins  (L298N or similar, 4 motors × 3 pins = 12 pins, Mega 25-36)

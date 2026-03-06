@@ -1,51 +1,111 @@
+// -------------------------------------------------
+// Copyright (c) 2022 HiBit <https://www.hibit.dev>
+// -------------------------------------------------
 
-// Note definitions for the melody
-#define NOTE_C4 262
-#define NOTE_D4 294
-#define NOTE_E4 330
-#define NOTE_F4 349
-#define NOTE_G4 392
-#define NOTE_A4 440
-#define NOTE_AS4 466
-#define NOTE_C5 523
+#include "pitches.h"
 
-// Define the buzzer pin
-int buzzerPin = 7;
+#define BUZZER_PIN_1 7
+#define BUZZER_PIN_2 12
 
-// Define the "Happy Birthday" melody
 int melody[] = {
-  NOTE_C4, NOTE_C4, NOTE_D4, NOTE_C4, NOTE_F4, NOTE_E4, // "Happy Birthday to You"
-  NOTE_C4, NOTE_C4, NOTE_D4, NOTE_C4, NOTE_G4, NOTE_F4, // "Happy Birthday to You"
-  NOTE_C4, NOTE_C4, NOTE_C5, NOTE_A4, NOTE_F4, NOTE_E4, NOTE_D4, // "Happy Birthday dear [Name]"
-  NOTE_AS4, NOTE_AS4, NOTE_A4, NOTE_F4, NOTE_G4, NOTE_F4 // "Happy Birthday to You"
+  REST, NOTE_D4,
+  NOTE_G4, NOTE_AS4, NOTE_A4,
+  NOTE_G4, NOTE_D5,
+  NOTE_C5, 
+  NOTE_A4,
+  NOTE_G4, NOTE_AS4, NOTE_A4,
+  NOTE_F4, NOTE_GS4,
+  NOTE_D4, 
+  NOTE_D4,
+  
+  NOTE_G4, NOTE_AS4, NOTE_A4,
+  NOTE_G4, NOTE_D5,
+  NOTE_F5, NOTE_E5,
+  NOTE_DS5, NOTE_B4,
+  NOTE_DS5, NOTE_D5, NOTE_CS5,
+  NOTE_CS4, NOTE_B4,
+  NOTE_G4,
+  NOTE_AS4,
+   
+  NOTE_D5, NOTE_AS4,
+  NOTE_D5, NOTE_AS4,
+  NOTE_DS5, NOTE_D5,
+  NOTE_CS5, NOTE_A4,
+  NOTE_AS4, NOTE_D5, NOTE_CS5,
+  NOTE_CS4, NOTE_D4,
+  NOTE_D5, 
+  REST, NOTE_AS4,  
+  
+  NOTE_D5, NOTE_AS4,
+  NOTE_D5, NOTE_AS4,
+  NOTE_F5, NOTE_E5,
+  NOTE_DS5, NOTE_B4,
+  NOTE_DS5, NOTE_D5, NOTE_CS5,
+  NOTE_CS4, NOTE_AS4,
+  NOTE_G4
 };
 
-// Define the note durations
-int noteDurations[] = {
-  4, 4, 4, 4, 4, 2,
-  4, 4, 4, 4, 4, 2,
-  4, 4, 4, 4, 4, 4, 2,
-  4, 4, 4, 4, 4, 2
+int durations[] = {
+  2, 4,
+  4, 8, 4,
+  2, 4,
+  2, 
+  2,
+  4, 8, 4,
+  2, 4,
+  1, 
+  4,
+  
+  4, 8, 4,
+  2, 4,
+  2, 4,
+  2, 4,
+  4, 8, 4,
+  2, 4,
+  1,
+  4,
+   
+  2, 4,
+  2, 4,
+  2, 4,
+  2, 4,
+  4, 8, 4,
+  2, 4,
+  1, 
+  4, 4,  
+  
+  2, 4,
+  2, 4,
+  2, 4,
+  2, 4,
+  4, 8, 4,
+  2, 4,
+  1
 };
-
-
-void setup() {
-  // Iterate over the notes of the melody:
-  for (int thisNote = 0; thisNote < 24; thisNote++) {
-    // To calculate the note duration, take one second divided by the note type.
-    int noteDuration = 1000 / noteDurations[thisNote];
-    tone(buzzerPin, melody[thisNote], noteDuration);
-
-    // To distinguish the notes, set a minimum time between them.
-    int pauseBetweenNotes = noteDuration * 1.30;
-    delay(pauseBetweenNotes);
-
-    // Stop the tone playing:
-    noTone(buzzerPin);
-  }
+void setup()
+{
+  pinMode(BUZZER_PIN_1, OUTPUT);
+  pinMode(BUZZER_PIN_2, OUTPUT);
 }
 
-void loop() {
-  // No need to repeat the melody in the loop for this example.
-  // The setup() is enough to play it once.
+void loop()
+{
+  int size = sizeof(durations) / sizeof(int);
+
+  for (int note = 0; note < size; note++) {
+    //to calculate the note duration, take one second divided by the note type.
+    //e.g. quarter note = 1000 / 4, eighth note = 1000/8, etc.
+    int duration = 1000 / durations[note];
+    tone(BUZZER_PIN_1, melody[note], duration);
+    tone(BUZZER_PIN_2, melody[note], duration);
+
+    //to distinguish the notes, set a minimum time between them.
+    //the note's duration + 30% seems to work well:
+    int pauseBetweenNotes = duration * 1.30;
+    delay(pauseBetweenNotes);
+
+    //stop the tone playing:
+    noTone(BUZZER_PIN_1);
+    noTone(BUZZER_PIN_2);
+  }
 }

@@ -31,16 +31,16 @@
 //   LED_<n>:STATE:OFF
 //   LED_<n>:STATE:BLINK
 
-#define LED_BASE_ID               "LED"
-#define LED_ID(num)               LED_BASE_ID "_" #num
-#define LED_CMD_ON                "ON"
-#define LED_CMD_OFF               "OFF"
-#define LED_CMD_BLINK             "BLINK"
-#define LED_CMD_COLOR             "COLOR"
-#define LED_CMD_RANDOM            "RANDOM"
-#define LED_STATE_PREFIX          "STATE"
-#define LED_COLOR_PREFIX          "COLOR"
-#define LED_BRIGHTNESS_PREFIX     "BRIGHTNESS"
+#define LED_BASE_ID "LED"
+#define LED_ID(num) LED_BASE_ID "_" #num
+#define LED_CMD_ON "ON"
+#define LED_CMD_OFF "OFF"
+#define LED_CMD_BLINK "BLINK"
+#define LED_CMD_COLOR "COLOR"
+#define LED_CMD_RANDOM "RANDOM"
+#define LED_STATE_PREFIX "STATE"
+#define LED_COLOR_PREFIX "COLOR"
+#define LED_BRIGHTNESS_PREFIX "BRIGHTNESS"
 
 // ---------------------------------------------------------------------------
 // LCD
@@ -51,26 +51,27 @@
 // Outcome:
 //   LCD_<n>:TEXT:<text>
 
-#define LCD_BASE_ID               "LCD"
-#define LCD_ID(num)               LCD_BASE_ID "_" #num
-#define LCD_TEXT_PREFIX           "TEXT"
+#define LCD_BASE_ID "LCD"
+#define LCD_ID(num) LCD_BASE_ID "_" #num
+#define LCD_TEXT_PREFIX "TEXT"
 
 // ---------------------------------------------------------------------------
 // Buzzer
 // ---------------------------------------------------------------------------
 // Income:
 //   BUZZ:BUZZ_<n>:OFF
-//   BUZZ:BUZZ_<n>:<freq>,<duration_ms>   (e.g. "1000,500")
+//   BUZZ:BUZZ_<n>:SOUND:<freq>,<duration_ms>   (e.g. "1000,500")
 //
 // Outcome:
 //   BUZZ_<n>:STATE:OFF
 //   BUZZ_<n>:TONE:<freq>,<duration_ms>
 
-#define BUZZER_BASE_ID            "BUZZ"
-#define BUZZER_ID(num)            BUZZER_BASE_ID "_" #num
-#define BUZZER_CMD_OFF            "OFF"
-#define BUZZER_STATE_PREFIX       "STATE"
-#define BUZZER_TONE_PREFIX        "TONE"
+#define BUZZER_BASE_ID "BUZZ"
+#define BUZZER_ID(num) BUZZER_BASE_ID "_" #num
+#define BUZZER_CMD_OFF "OFF"
+#define BUZZER_CMD_SOUND "SOUND"
+#define BUZZER_STATE_PREFIX "STATE"
+#define BUZZER_TONE_PREFIX "TONE"
 
 // ---------------------------------------------------------------------------
 // Motor
@@ -86,14 +87,14 @@
 //   MOT_<n>:DIR:REV,SPD:<speed>
 //   MOT_<n>:STATE:STOP
 
-#define MOTOR_BASE_ID             "MOT"
-#define MOTOR_ID(num)             MOTOR_BASE_ID "_" #num
-#define MOTOR_CMD_FWD             "FWD"
-#define MOTOR_CMD_REV             "REV"
-#define MOTOR_CMD_STOP            "STOP"
-#define MOTOR_DIR_PREFIX          "DIR"
-#define MOTOR_SPD_PREFIX          "SPD"
-#define MOTOR_STATE_PREFIX        "STATE"
+#define MOTOR_BASE_ID "MOT"
+#define MOTOR_ID(num) MOTOR_BASE_ID "_" #num
+#define MOTOR_CMD_FWD "FWD"
+#define MOTOR_CMD_REV "REV"
+#define MOTOR_CMD_STOP "STOP"
+#define MOTOR_DIR_PREFIX "DIR"
+#define MOTOR_SPD_PREFIX "SPD"
+#define MOTOR_STATE_PREFIX "STATE"
 
 // ---------------------------------------------------------------------------
 // Ultrasound (HC-SR04)
@@ -105,9 +106,9 @@
 //   US_<n>:DIST:<cm>
 //   US_<n>:DIST:ERROR
 
-#define ULTRASOUND_BASE_ID        "US"
-#define ULTRASOUND_ID(num)        ULTRASOUND_BASE_ID "_" #num
-#define ULTRASOUND_PING_COMMAND   "PING"
+#define ULTRASOUND_BASE_ID "US"
+#define ULTRASOUND_ID(num) ULTRASOUND_BASE_ID "_" #num
+#define ULTRASOUND_PING_COMMAND "PING"
 #define ULTRASOUND_DISTANCE_MEASURED_PREFIX "DIST"
 
 // ---------------------------------------------------------------------------
@@ -141,11 +142,11 @@
 // Outcome:
 //   EYES_<n>:GAZE:ok
 
-#define EYES_BASE_ID              "EYES"
-#define EYES_GAZE_BASE_ID         "GAZE"
-#define EYES_ID(num)              EYES_BASE_ID "_" #num
-#define EYES_IRIS_PREFIX          "IRIS"
-#define EYES_GAZE_PREFIX          "GAZE"
+#define EYES_BASE_ID "EYES"
+#define EYES_GAZE_BASE_ID "GAZE"
+#define EYES_ID(num) EYES_BASE_ID "_" #num
+#define EYES_IRIS_PREFIX "IRIS"
+#define EYES_GAZE_PREFIX "GAZE"
 
 // ---------------------------------------------------------------------------
 

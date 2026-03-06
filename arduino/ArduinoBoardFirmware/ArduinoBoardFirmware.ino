@@ -22,7 +22,9 @@ LedController led2(LED_ID(2), PIN_LED_2, LED_NUM_PIXELS);
 // LcdController lcd2("LCD_2", LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
 // LcdController lcd3("LCD_3", LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
 
-// BuzzerController buzzer1("BUZZ_1", PIN_BUZZER);
+BuzzerController buzzer1(BUZZER_ID(1), PIN_BUZZER_1);
+BuzzerController buzzer2(BUZZER_ID(2), PIN_BUZZER_2);
+
 // MotorController motor1("MOT_1", PIN_MOTOR_1_IN1, PIN_MOTOR_1_IN2, PIN_MOTOR_1_EN);
 
 UltrasoundController us1(ULTRASOUND_ID(1), ULTRASOUND_1_ECHO_PIN, ULTRASOUND_1_TRIG_PIN);
@@ -51,7 +53,9 @@ void setup()
     // coordinator.Attach(&lcd2, "LCD");
     // coordinator.Attach(&lcd3, "LCD");
 
-    // coordinator.Attach(&buzzer1, "BUZZ");
+    coordinator.Attach(&buzzer1, BUZZER_BASE_ID);
+    coordinator.Attach(&buzzer2, BUZZER_BASE_ID);
+
     // coordinator.Attach(&motor1, "MOT");
     coordinator.Attach(&us1, ULTRASOUND_BASE_ID);
     coordinator.Attach(&us2, ULTRASOUND_BASE_ID);
@@ -74,7 +78,8 @@ void setup()
     // lcd2.sanityTest();
     // lcd3.sanityTest();
 
-    // buzzer1.sanityTest();
+    buzzer1.sanityTest();
+    buzzer2.sanityTest();
 
     // motor1.sanityTest();
 
