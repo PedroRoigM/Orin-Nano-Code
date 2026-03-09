@@ -116,18 +116,14 @@
 // Eyes (GC9A01 × 2)
 // ---------------------------------------------------------------------------
 // Income:
-//   EYE:EYE_<n>:<gx>,<gy>,<r>,<g>,<b>
-//       <gx/gy> : gaze offset, -100 to +100
-//                 (mapped internally to ±MAX_GAZE pixels)
-//       <r/g/b> : iris colour, 0-255 each
-//
-//   EYE:EYE_<n>:COLOR:<r>,<g>,<b>
-//   EYE:EYE_<n>:SHAPE:<type>   (circle, star, smiley, x)
-//
-// Example:
-//   EYE:EYE_1:30,-10,255,200,0
-//   EYE:EYE_1:COLOR:255,0,0
-//   EYE:EYE_1:SHAPE:star
+//   EYE:EYE_<n>:ON                           (Wake up/turn on)
+//   EYE:EYE_<n>:OFF                          (Sleep/turn off)
+//   EYE:EYE_<n>:FILL:<r>,<g>,<b>             (Full screen of a plain color)
+//   EYE:EYE_<n>:DRAW:<shape>,<r>,<g>,<b>,<bg_r>,<bg_g>,<bg_b>
+//       <shape> : neutral, happy, sad
+//       <r/g/b> : eye color
+//       <bg_r/bg_g/bg_b> : background color
+//   EYE:EYE_<n>:MOVE:<x>,<y>                 (Move to coordinate, x/y offsets)
 //
 // Outcome:
 //   EYE_<n>:READY:ok
@@ -137,8 +133,15 @@
 #define EYE_ID(num) EYE_BASE_ID "_" #num
 #define EYE_PREFIX "EYE"
 #define EYE_READY_PREFIX "READY"
-#define EYE_CMD_COLOR "COLOR"
-#define EYE_CMD_SHAPE "SHAPE"
+
+#define EYE_CMD_ON "ON"
+#define EYE_CMD_OFF "OFF"
+#define EYE_CMD_FILL "FILL"
+#define EYE_CMD_DRAW "DRAW"
+#define EYE_CMD_MOVE "MOVE"
+#define EYE_SHAPE_NEUTRAL "neutral"
+#define EYE_SHAPE_HAPPY "happy"
+#define EYE_SHAPE_SAD "sad"
 
 // ---------------------------------------------------------------------------
 
