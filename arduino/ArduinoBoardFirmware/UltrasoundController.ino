@@ -14,6 +14,9 @@ void UltrasoundController::sanityTest()
     Serial.print(observerId);
     Serial.print(F(" ... "));
 
+    // First, exercise the message pipeline with a protocol-style ping.
+    Update(observerId + ":" + String(ULTRASOUND_PING_COMMAND));
+
     long distanceCm = readDistanceCm();
 
     if (distanceCm > 0)

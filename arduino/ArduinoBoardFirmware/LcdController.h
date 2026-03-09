@@ -20,6 +20,9 @@ protected:
 
 private:
     LiquidCrystal_I2C _lcd;
+
+    // Applies a new text value to the LCD and reports over Serial.
+    void displayText(const String &text);
 };
 
 #endif // LCD_CONTROLLER_H

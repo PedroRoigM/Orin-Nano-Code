@@ -18,11 +18,11 @@ void LcdController::sanityTest()
     Serial.print(observerId);
     Serial.print(F(" ... "));
 
-    _lcd.clear();
-    _lcd.setCursor(0, 0);
-    _lcd.print(F("Sanity Test OK"));
+    // Exercise the message pipeline by sending a text update as if it were
+    // coming from the Coordinator.
+    Update(observerId + ":Sanity Test OK");
     delay(1000);
-    _lcd.clear();
+    Update(observerId + ":");
 
     Serial.println(F("PASS"));
 }
@@ -34,8 +34,21 @@ void LcdController::Update(const String &message)
 
 void LcdController::parseMessage(const String &message)
 {
+    int colonIndex = message.indexOf(':');
+    if (colonIndex <= 0) return;
+
+    String targetId = message.substring(0, colonIndex);
+    String text     = message.substring(colonIndex + 1);
+
+    if (targetId != observerId) return;
+
+    displayText(text);
+}
+
+void LcdController::displayText(const String &text)
+{
     _lcd.clear();
     _lcd.setCursor(0, 0);
-    _lcd.print(message);
-    sendToSerial("TEXT:" + message);
+    _lcd.print(text);
+    sendToSerial(String(LCD_TEXT_PREFIX) + ":" + text);
 }

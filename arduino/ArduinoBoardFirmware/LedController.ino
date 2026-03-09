@@ -15,21 +15,30 @@ void LedController::sanityTest()
     Serial.print(observerId);
     Serial.print(F(" ... "));
 
-    this->handleCmdOff();
+    // Exercise the full message pipeline by sending protocol-style commands
+    // as if they were coming from the Coordinator.
+    Update(observerId + ":" + String(LED_CMD_OFF));
     delay(200);
-    this->handleCmdOn();
+
+    Update(observerId + ":" + String(LED_CMD_ON));
     delay(200);
-    this->handleCmdColor("COLOR:255,0,0");
+
+    Update(observerId + ":" + String(LED_CMD_COLOR) + ":255,0,0");
     delay(200);
-    this->handleCmdRandom();
+
+    Update(observerId + ":" + String(LED_CMD_RANDOM));
     delay(200);
-    this->handleCmdBlink();
+
+    Update(observerId + ":" + String(LED_CMD_BLINK));
     delay(200);
-    this->handleCmdBrightness("BRIGHTNESS:255");
+
+    Update(observerId + ":" + String(LED_BRIGHTNESS_PREFIX) + ":255");
     delay(200);
-    this->handleCmdBrightness("BRIGHTNESS:50");
+
+    Update(observerId + ":" + String(LED_BRIGHTNESS_PREFIX) + ":50");
     delay(200);
-    this->handleCmdOff();
+
+    Update(observerId + ":" + String(LED_CMD_OFF));
 
     Serial.println(F("PASS"));
 }

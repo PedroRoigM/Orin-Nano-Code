@@ -60,27 +60,31 @@ void EyeController::sanityTest()
     Serial.print(observerId);
     Serial.print(F(" ... "));
 
-    const uint16_t colors[] = {0xF800, 0x07E0, 0x001F};
-    for (uint16_t c : colors)
-    {
-        fillRect(0, 0, 239, 239, c);
-        delay(150);
-    }
-    
-    // Cycle through shapes
-    PupilShape shapes[] = {PUPIL_CIRCLE, PUPIL_STAR, PUPIL_SMILEY, PUPIL_X};
-    for (PupilShape s : shapes) {
-        _s_shape = s;
-        _new_cmd = true;
-        redraw();
-        delay(300);
-    }
+    // Exercise the message pipeline by sending high-level eye commands as if
+    // they were coming from the Coordinator.
 
-    // Back to normal
-    _s_shape = PUPIL_CIRCLE;
-    fillRect(0, 0, 239, 239, 0x0000);
-    _new_cmd = true; // Trigger redraw
-    redraw();
+    // Cycle some colours
+    Update(observerId + ":" + String(EYE_CMD_COLOR) + ":255,0,0");
+    delay(200);
+    Update(observerId + ":" + String(EYE_CMD_COLOR) + ":0,255,0");
+    delay(200);
+    Update(observerId + ":" + String(EYE_CMD_COLOR) + ":0,0,255");
+    delay(200);
+
+    // Cycle through shapes
+    Update(observerId + ":" + String(EYE_CMD_SHAPE) + ":circle");
+    delay(250);
+    Update(observerId + ":" + String(EYE_CMD_SHAPE) + ":star");
+    delay(250);
+    Update(observerId + ":" + String(EYE_CMD_SHAPE) + ":smiley");
+    delay(250);
+    Update(observerId + ":" + String(EYE_CMD_SHAPE) + ":x");
+    delay(250);
+
+    // Simple gaze move and reset back to centre with neutral colour
+    Update(observerId + ":30,-10,255,200,0");
+    delay(250);
+    Update(observerId + ":0,0,60,150,240");
 
     Serial.println(F("PASS"));
 }
@@ -101,57 +105,76 @@ void EyeController::parseMessage(const String &message)
     if (targetId != observerId) return;
 
     if (command.startsWith(EYE_CMD_COLOR)) {
-        // Format: COLOR:r,g,b
-        int dataColon = command.indexOf(':');
-        if (dataColon > 0) {
-            String colors = command.substring(dataColon + 1);
-            int c1 = colors.indexOf(',');
-            int c2 = colors.lastIndexOf(',');
-            if (c1 > 0 && c2 > c1) {
-                _s_r = (uint8_t)constrain(colors.substring(0, c1).toInt(), 0, 255);
-                _s_g = (uint8_t)constrain(colors.substring(c1 + 1, c2).toInt(), 0, 255);
-                _s_b = (uint8_t)constrain(colors.substring(c2 + 1).toInt(), 0, 255);
-                _new_cmd = true;
-                sendToSerial(F("EYE:ok"));
-            }
-        }
+        handleColorCommand(command);
     } else if (command.startsWith(EYE_CMD_SHAPE)) {
-        // Format: SHAPE:type
-        int dataColon = command.indexOf(':');
-        if (dataColon > 0) {
-            String shapeType = command.substring(dataColon + 1);
-            shapeType.toLowerCase();
-            if (shapeType == "circle") _s_shape = PUPIL_CIRCLE;
-            else if (shapeType == "star")   _s_shape = PUPIL_STAR;
-            else if (shapeType == "smiley") _s_shape = PUPIL_SMILEY;
-            else if (shapeType == "x")      _s_shape = PUPIL_X;
-            _new_cmd = true;
-            sendToSerial(F("EYE:ok"));
-        }
+        handleShapeCommand(command);
     } else {
-        // Format: gx,gy,r,g,b
-        int i0 = command.indexOf(',');
-        int i1 = (i0 >= 0) ? command.indexOf(',', i0 + 1) : -1;
-        int i2 = (i1 >= 0) ? command.indexOf(',', i1 + 1) : -1;
-        int i3 = (i2 >= 0) ? command.indexOf(',', i2 + 1) : -1;
-
-        if (i3 >= 0) {
-            int raw_gx = command.substring(0, i0).toInt();
-            int raw_gy = command.substring(i0 + 1, i1).toInt();
-            int raw_r  = command.substring(i1 + 1, i2).toInt();
-            int raw_g  = command.substring(i2 + 1, i3).toInt();
-            int raw_b  = command.substring(i3 + 1).toInt();
-
-            _s_gx = constrain(raw_gx, -100, 100);
-            _s_gy = constrain(raw_gy, -100, 100);
-            _s_r  = (uint8_t)constrain(raw_r, 0, 255);
-            _s_g  = (uint8_t)constrain(raw_g, 0, 255);
-            _s_b  = (uint8_t)constrain(raw_b, 0, 255);
-            
-            _new_cmd = true;
-            sendToSerial(F("EYE:ok"));
-        }
+        handleGazeCommand(command);
     }
+}
+
+void EyeController::handleColorCommand(const String &command)
+{
+    // Format: COLOR:r,g,b
+    int dataColon = command.indexOf(':');
+    if (dataColon <= 0) return;
+
+    String colors = command.substring(dataColon + 1);
+    int c1 = colors.indexOf(',');
+    int c2 = colors.lastIndexOf(',');
+    if (c1 <= 0 || c2 <= c1) return;
+
+    _s_r = (uint8_t)constrain(colors.substring(0, c1).toInt(), 0, 255);
+    _s_g = (uint8_t)constrain(colors.substring(c1 + 1, c2).toInt(), 0, 255);
+    _s_b = (uint8_t)constrain(colors.substring(c2 + 1).toInt(), 0, 255);
+
+    _new_cmd = true;
+    sendToSerial(String(EYE_PREFIX) + ":ok");
+}
+
+void EyeController::handleShapeCommand(const String &command)
+{
+    // Format: SHAPE:type
+    int dataColon = command.indexOf(':');
+    if (dataColon <= 0) return;
+
+    String shapeType = command.substring(dataColon + 1);
+    shapeType.toLowerCase();
+
+    if (shapeType == "circle") _s_shape = PUPIL_CIRCLE;
+    else if (shapeType == "star")   _s_shape = PUPIL_STAR;
+    else if (shapeType == "smiley") _s_shape = PUPIL_SMILEY;
+    else if (shapeType == "x")      _s_shape = PUPIL_X;
+    else return;
+
+    _new_cmd = true;
+    sendToSerial(String(EYE_PREFIX) + ":ok");
+}
+
+void EyeController::handleGazeCommand(const String &command)
+{
+    // Format: gx,gy,r,g,b
+    int i0 = command.indexOf(',');
+    int i1 = (i0 >= 0) ? command.indexOf(',', i0 + 1) : -1;
+    int i2 = (i1 >= 0) ? command.indexOf(',', i1 + 1) : -1;
+    int i3 = (i2 >= 0) ? command.indexOf(',', i2 + 1) : -1;
+
+    if (i3 < 0) return;
+
+    int raw_gx = command.substring(0, i0).toInt();
+    int raw_gy = command.substring(i0 + 1, i1).toInt();
+    int raw_r  = command.substring(i1 + 1, i2).toInt();
+    int raw_g  = command.substring(i2 + 1, i3).toInt();
+    int raw_b  = command.substring(i3 + 1).toInt();
+
+    _s_gx = constrain(raw_gx, -100, 100);
+    _s_gy = constrain(raw_gy, -100, 100);
+    _s_r  = (uint8_t)constrain(raw_r, 0, 255);
+    _s_g  = (uint8_t)constrain(raw_g, 0, 255);
+    _s_b  = (uint8_t)constrain(raw_b, 0, 255);
+
+    _new_cmd = true;
+    sendToSerial(String(EYE_PREFIX) + ":ok");
 }
 
 void EyeController::redraw()

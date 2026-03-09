@@ -63,6 +63,11 @@ private:
     void drawBall(int new_cx, int new_cy, uint16_t irisCol, PupilShape shape);
     void drawHighlight(int cx, int cy, uint16_t irisCol);
     void initGC9A01();
+
+    // High-level protocol handlers invoked from parseMessage()
+    void handleColorCommand(const String &command);
+    void handleShapeCommand(const String &command);
+    void handleGazeCommand(const String &command);
     
     // Low-level SPI helpers (Optimized with bitmasks)
     inline void CS_LOW()  { PORTL &= ~_cs_mask; }

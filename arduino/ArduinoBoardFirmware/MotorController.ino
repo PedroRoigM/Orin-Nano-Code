@@ -15,12 +15,10 @@ void MotorController::sanityTest()
     Serial.print(observerId);
     Serial.print(F(" ... "));
 
-    // Forward at low speed for 500 ms
-    digitalWrite(_pinIn1, HIGH);
-    digitalWrite(_pinIn2, LOW);
-    analogWrite(_pinEn, 80);
+    // Exercise the message pipeline with protocol-style motor commands.
+    Update(observerId + ":" + String(MOTOR_CMD_FWD) + ",80");
     delay(500);
-    stop();
+    Update(observerId + ":" + String(MOTOR_CMD_STOP));
 
     Serial.println(F("PASS"));
 }
@@ -32,16 +30,34 @@ void MotorController::Update(const String &message)
 
 void MotorController::parseMessage(const String &message)
 {
-    int commaIndex = message.indexOf(',');
-    if (commaIndex < 0)
-    {
-        applyDirection(message, 0);
+    int colonIndex = message.indexOf(':');
+    if (colonIndex <= 0)
         return;
+
+    String targetId = message.substring(0, colonIndex);
+    String command  = message.substring(colonIndex + 1);
+
+    if (targetId != observerId)
+        return;
+
+    // Command format (see CommunicationPortocolDeclaration.h):
+    //   FWD,<speed> | REV,<speed> | STOP or STOP,<ignored>
+    int commaIndex = command.indexOf(',');
+    String direction = (commaIndex < 0) ? command : command.substring(0, commaIndex);
+    int speed = 0;
+    if (commaIndex >= 0)
+    {
+        speed = constrain(command.substring(commaIndex + 1).toInt(), 0, 255);
     }
 
-    String direction = message.substring(0, commaIndex);
-    int speed        = constrain(message.substring(commaIndex + 1).toInt(), 0, 255);
-    applyDirection(direction, speed);
+    if (direction == MOTOR_CMD_STOP)
+    {
+        stop();
+    }
+    else
+    {
+        applyDirection(direction, speed);
+    }
 }
 
 void MotorController::applyDirection(const String &direction, int speed)

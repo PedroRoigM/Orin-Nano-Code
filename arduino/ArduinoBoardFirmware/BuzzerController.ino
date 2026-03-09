@@ -12,7 +12,9 @@ void BuzzerController::sanityTest()
     Serial.print(observerId);
     Serial.print(F(" ... "));
 
-    tone(_pin, 1000, 300); // 1 kHz for 300 ms
+    // Exercise the full message pipeline using a protocol-style command,
+    // as if it were coming from the Coordinator.
+    Update(observerId + ":" + String(BUZZER_CMD_SOUND) + ":1000,300");
     delay(400);            // wait for tone to finish
 
     Serial.println(F("PASS"));
