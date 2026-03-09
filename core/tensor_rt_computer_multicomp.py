@@ -40,8 +40,8 @@ from time import time
 
 from processing.emotion_color_mapper      import EmotionColorMapper
 from controllers.eyes_controller          import EyesController
-from controllers.camera_servo_controller  import CameraServoController
 from companion_behavior                   import BehaviorEngine, BEHAVIOR
+from GUI.visual_eyes                      import RobotWindow
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Argumentos
@@ -62,15 +62,9 @@ OUTPUT_PATH           = "output.mp4"
 EMOTIONS = ["neutral", "happiness", "surprise", "sadness",
             "anger",   "disgust",   "fear",     "contempt"]
 
-ARDUINO_PORT         = None              # None = auto-detectar; o forzar: "/dev/cu.usbmodemXXXX"
+ARDUINO_PORT         = 'COM13'              # None = auto-detectar; o forzar: "/dev/cu.usbmodemXXXX"
 ARDUINO_BAUD         = 115200
 ULTRASONIC_THRESHOLD = 10.0
-
-# Puerto dedicado para los servos de cuello (Demo_neck o Arduino separado).
-# None = usar el mismo puerto del Arduino principal (producción, un solo Arduino).
-# Poner la ruta del puerto cuando el Arduino de cuello es un dispositivo separado.
-NECK_PORT = 'COM13'   # ej. '/dev/cu.usbmodem2101' o 'COM5'
-NECK_BAUD = 9600
 
 EYE_DISPLAY_SIZE = 240   # tamaño del cuadrado donde se renderiza cada ojo
 
@@ -158,7 +152,6 @@ arduino.on_obstacle = _on_obstacle
 arduino.start()
 
 if _port != "MOCK":
-    arduino.lcd.display_two_lines("Robot medico", "Listo :)")
     arduino.buzzer.startup_chime()
     arduino.leds.on()
     print("[Arduino] Hardware conectado en", _port)
@@ -169,198 +162,16 @@ else:
 # ---------------------------------------------------------------------------
 # SimulatedEyes — EyeRenderer con interfaz compatible con GC9A01Controller
 # ---------------------------------------------------------------------------
-class SimulatedEyes:
-    """
-    Renderizador visual de los ojos GC9A01 usando EyeRenderer + OpenCV.
-    Solo visualización — NO emite comandos seriales.
-    (Los comandos seriales los gestiona arduino.eyes: EyesController / MockEyes.)
-
-    API:
-      .update(gaze_x, gaze_y, emotion, confidence=1.0, iris_color_override=None)
-      .set_idle()
-      .get_frames() → (left_240x240, right_240x240)  para mostrar en pantalla.
-    """
-
-    LERP_GAZE  = 0.18
-    LERP_COLOR = 0.08
-    BLINK_DUR  = 0.22   # segundos
-
-    def __init__(self) -> None:
-        self._renderer   = EyeRenderer()
-        self._lock       = threading.Lock()
-
-        # Estado de mirada (suavizado)
-        self._gaze_x     = 0.0
-        self._gaze_y     = 0.0
-        self._tgt_gaze_x = 0.0
-        self._tgt_gaze_y = 0.0
-
-        # Color de iris (suavizado)
-        _default = list(IRIS_COLOR_RGB.get("neutral", (200, 200, 200)))
-        self._iris_rgb   = _default[:]
-        self._tgt_rgb    = _default[:]
-
-        # Morfología del ojo
-        self._squint     = 0.0
-        self._wide       = 0.0
-        self._tgt_squint = 0.0
-        self._tgt_wide   = 0.0
-
-        # Parpadeo automático
-        self._blink_start  = None
-        self._blink_factor = 1.0
-        self._next_blink   = _time.time() + self._rand_blink()
-
-    @staticmethod
-    def _rand_blink() -> float:
-        import random
-        return random.uniform(3.0, 7.0)
-
-    # ── API visual (actualizada en el bucle principal) ─────────────────────────
-
-    def update(
-        self,
-        gaze_x:              float,
-        gaze_y:              float,
-        emotion:             str,
-        confidence:          float = 1.0,
-        iris_color_override: tuple | None = None,
-    ) -> None:
-        """
-        Actualiza la mirada y el estado emocional del ojo simulado (solo visual).
-        Usa los colores terapéuticos del BEHAVIOR por defecto; iris_color_override
-        los sobreescribe si se proporciona.
-        No emite ningún comando serial — eso lo hace arduino.eyes.
-        """
-        b = BEHAVIOR.get(emotion, BEHAVIOR["neutral"])
-        with self._lock:
-            self._tgt_gaze_x = float(np.clip(gaze_x, -1.0, 1.0))
-            self._tgt_gaze_y = float(np.clip(gaze_y, -1.0, 1.0))
-            self._tgt_squint = b.get("eyes_squint", 0.0)
-            self._tgt_wide   = b.get("eyes_wide",   0.0)
-            if iris_color_override is not None:
-                self._tgt_rgb = [int(c) for c in iris_color_override]
-            else:
-                # Colores terapéuticos del BEHAVIOR (≠ FER+ estándar de IRIS_COLOR_RGB)
-                rgb = b.get("eyes_rgb", list(IRIS_COLOR_RGB.get(emotion, (200, 200, 200))))
-                self._tgt_rgb = [int(c) for c in rgb]
-
-    def set_idle(self) -> None:
-        """Centra la mirada y aplica el estado 'no_face' (solo visual)."""
-        b = BEHAVIOR.get("no_face", BEHAVIOR["neutral"])
-        with self._lock:
-            self._tgt_gaze_x = 0.0
-            self._tgt_gaze_y = 0.0
-            self._tgt_squint = b.get("eyes_squint", 0.25)
-            self._tgt_wide   = b.get("eyes_wide",   0.00)
-            rgb = b.get("eyes_rgb", list(IRIS_COLOR_RGB.get("neutral", (200, 200, 180))))
-            self._tgt_rgb = [int(c) for c in rgb]
-
-    # ── Frames renderizados para el display ───────────────────────────────────
-
-    def get_frames(self) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Devuelve (ojo_izquierdo, ojo_derecho) como ndarray BGR 240×240.
-        Aplica suavizado de mirada, color e interpola morfología del párpado.
-        Llamar en cada frame del bucle principal.
-        """
-        now = _time.time()
-        with self._lock:
-            # Suavizado de mirada
-            self._gaze_x += (self._tgt_gaze_x - self._gaze_x) * self.LERP_GAZE
-            self._gaze_y += (self._tgt_gaze_y - self._gaze_y) * self.LERP_GAZE
-
-            # Suavizado de color
-            for i in range(3):
-                self._iris_rgb[i] += (self._tgt_rgb[i] - self._iris_rgb[i]) * self.LERP_COLOR
-
-            # Suavizado de morfología
-            self._squint += (self._tgt_squint - self._squint) * 0.12
-            self._wide   += (self._tgt_wide   - self._wide)   * 0.12
-
-            # Parpadeo automático
-            if self._blink_start is None and now >= self._next_blink:
-                self._blink_start = now
-            if self._blink_start is not None:
-                elapsed = now - self._blink_start
-                half    = self.BLINK_DUR / 2
-                self._blink_factor = max(0.0, 1.0 - abs(elapsed - half) / half * 2)
-                if elapsed > self.BLINK_DUR:
-                    self._blink_factor = 1.0
-                    self._blink_start  = None
-                    self._next_blink   = now + self._rand_blink()
-
-            gx     = self._gaze_x
-            gy     = self._gaze_y
-            color  = tuple(int(c) for c in self._iris_rgb)
-            bf     = self._blink_factor
-            sq     = self._squint
-            wd     = self._wide
-
-        left  = self._renderer.render(gx, gy, color, bf, sq, wd, mirrored=False)
-        right = self._renderer.render(gx, gy, color, bf, sq, wd, mirrored=True)
-        return left, right
-
-
+# El renderizador visual ha sido movido a GUI.visual_eyes
 # ---------------------------------------------------------------------------
 # Inicializar ojos y BehaviorEngine
 # ---------------------------------------------------------------------------
 # visual_eyes: renderizador visual en pantalla (puro OpenCV, sin serial)
 # arduino.eyes: EyesController / MockEyes → gestiona los comandos SERIAL →
 # BehaviorEngine usa arduino.eyes (no visual_eyes) para el comportamiento médico.
-visual_eyes = SimulatedEyes()
+robot_window = RobotWindow(FRAME_W, FRAME_H, EYE_DISPLAY_SIZE)
+visual_eyes  = robot_window.robot_eyes
 behavior    = BehaviorEngine(arduino=arduino, eyes=arduino.eyes)
-
-# Servos pan/tilt de cuello
-# ─────────────────────────────────────────────────────────────────────────────
-# · NECK_PORT definido  → Arduino de cuello separado (p.ej. Demo_neck).
-#   Se abre un puerto serie dedicado con _DirectSerialPort para no interferir
-#   con el ArduinoController principal (baud, protocolo y UltrasonicObserver).
-# · NECK_PORT = None    → producción (un solo Arduino): usa arduino._port /
-#   arduino.neck_port según si hay hardware real o MockArduino.
-# ─────────────────────────────────────────────────────────────────────────────
-_neck_serial_raw = None   # guardamos la referencia para cerrarlo en finally
-
-if NECK_PORT is not None:
-    # Arduino de cuello independiente — abre su propio puerto serial
-    class _DirectSerialPort:
-        """Wrapper mínimo sobre serial.Serial con la interfaz send_line()."""
-        def __init__(self, port: str, baud: int) -> None:
-            import serial as _serial
-            import time as _t
-            self._ser = _serial.Serial(port, baud, timeout=1)
-            _t.sleep(2.0)   # esperar reset del Arduino tras abrir el puerto
-            print(f"[CameraServo] Puerto directo en {port} @ {baud} baud")
-
-        def send_line(self, line: str) -> None:
-            if not line.endswith('\n'):
-                line += '\n'
-            try:
-                self._ser.write(line.encode('ascii'))
-                self._ser.flush()
-            except Exception as exc:
-                print(f"[CameraServo] Serial error: {exc}")
-
-        def close(self) -> None:
-            if self._ser.is_open:
-                self._ser.close()
-
-    try:
-        _direct = _DirectSerialPort(NECK_PORT, NECK_BAUD)
-        _neck_serial_raw = _direct   # para cerrarlo en finally
-        _neck_port = _direct
-        print(f"[CameraServo] Usando puerto dedicado {NECK_PORT}")
-    except Exception as _e:
-        print(f"[CameraServo] No se pudo abrir {NECK_PORT} ({_e}) — usando puerto del Arduino principal")
-        _neck_port = arduino._port
-else:
-    # Un solo Arduino — compartir el puerto del ArduinoController
-    _neck_port = arduino._port
-    print("[CameraServo] Usando puerto compartido del Arduino principal.")
-
-cam_servo = CameraServoController(_neck_port, verbose=False)
-cam_servo.center()
-print("[CameraServo] Controlador de cuello listo.")
 
 # ---------------------------------------------------------------------------
 # Tira de LEDs NeoPixel — stub con log serial visible en PC
@@ -390,231 +201,4 @@ out = cv2.VideoWriter(OUTPUT_PATH, cv2.VideoWriter_fourcc(*"mp4v"),
 # ---------------------------------------------------------------------------
 # La ventana tiene 640 px (cámara) + 10 (gap) + 240 (ojos) = 890 px de ancho
 # Los dos ojos se apilan verticalmente: 240+240=480 px (igual que el frame)
-WIN_W    = FRAME_W + 10 + EYE_DISPLAY_SIZE  # 890
-WIN_H    = FRAME_H                           # 480
-EYE_X    = FRAME_W + 10                     # columna inicial del panel de ojos
-EYE_L_Y  = 0                                # ojo izquierdo: fila 0
-EYE_R_Y  = FRAME_H // 2                     # ojo derecho:   fila 240
-
-
-def _draw_eye_bezel(canvas: np.ndarray, x: int, y: int, size: int = 240) -> None:
-    """Dibuja el bisel circular alrededor del ojo (simula el marco de la pantalla)."""
-    cx, cy, r = x + size // 2, y + size // 2, size // 2
-    cv2.circle(canvas, (cx, cy), r + 6,  (70, 65, 68), -1)   # anillo exterior
-    cv2.circle(canvas, (cx, cy), r + 2,  (18, 14, 16), -1)   # interior oscuro
-    # Reflejo sutil en la parte superior
-    pts = np.array([
-        [cx - r // 2, cy - r + 4],
-        [cx + r // 2, cy - r + 4],
-        [cx + r // 3, cy - r + 16],
-        [cx - r // 3, cy - r + 16],
-    ], np.int32)
-    overlay = canvas.copy()
-    cv2.fillPoly(overlay, [pts], (100, 100, 110))
-    cv2.addWeighted(overlay, 0.25, canvas, 0.75, 0, canvas)
-
-
-# ---------------------------------------------------------------------------
-# Estado
-# ---------------------------------------------------------------------------
-boxes           = None
-det_probs       = None
-frame_count     = 0
-fps_time        = time()
-fps             = 0.0
-FRAME_CX        = FRAME_W // 2
-FRAME_CY        = FRAME_H // 2
-current_emotion = "neutral"
-current_conf    = 0.0
-
-print("Grabando... Pulsa 'q' para detener.")
-cv2.namedWindow("Robot Medico", cv2.WINDOW_NORMAL)
-cv2.setWindowProperty("Robot Medico", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-
-# ---------------------------------------------------------------------------
-# Bucle principal
-# ---------------------------------------------------------------------------
-try:
-    while True:
-        ret, frame = cap.read()
-        if not ret or frame is None:
-            print("No frame received.")
-            break
-
-        frame_count += 1
-
-        if frame_count % 120 == 0:
-            fps = 120 / (time() - fps_time)
-            fps_time = time()
-
-        if frame_count % DETECT_EVERY_N_FRAMES == 0:
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            boxes, det_probs = mtcnn.detect(rgb)
-
-        faces_info = []
-
-        if boxes is not None:
-            for i, box in enumerate(boxes):
-                if det_probs[i] < CONF_THRESHOLD:
-                    continue
-                x1 = max(0, int(box[0]))
-                y1 = max(0, int(box[1]))
-                x2 = min(FRAME_W, int(box[2]))
-                y2 = min(FRAME_H, int(box[3]))
-                if x2 <= x1 or y2 <= y1:
-                    continue
-
-                face_cx = (x1 + x2) // 2
-                face_cy = (y1 + y2) // 2
-                face_roi = frame[y1:y2, x1:x2]
-                emotion, emo_conf = classify_emotion(face_roi)
-
-                faces_info.append(
-                    {
-                        "emotion":    emotion,
-                        "confidence": float(emo_conf),
-                        "cx":         face_cx,
-                        "cy":         face_cy,
-                    }
-                )
-
-                # Overlay visual en el frame (una caja por cara)
-                colors    = emotionMapper.get_color_dict(emotion, confidence=emo_conf)
-                box_color = colors["dominant_rgb"]
-                cv2.rectangle(frame, (x1, y1), (x2, y2), box_color, 2)
-                cv2.putText(frame, f"{emotion} {emo_conf:.0%}",
-                            (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
-                            0.55, box_color, 2)
-
-        face_count = len(faces_info)
-
-        if face_count > 0:
-            # Agregación de grupo: emoción dominante ponderada por confianza
-            emo_scores = Counter()
-            for f in faces_info:
-                emo_scores[f["emotion"]] += f["confidence"]
-
-            group_emotion, group_score = emo_scores.most_common(1)[0]
-            total_score = sum(emo_scores.values()) or 1.0
-            group_conf  = float(group_score / total_score)
-
-            # Cara principal: la de mayor confianza (usada para mirada y cuello)
-            primary = max(faces_info, key=lambda f: f["confidence"])
-
-            current_emotion = group_emotion
-            current_conf    = group_conf
-
-            changed = behavior.apply(
-                group_emotion,
-                group_conf,
-                face_cx=primary["cx"],
-                face_cy=primary["cy"],
-                frame_w=FRAME_W,
-                frame_h=FRAME_H,
-            )
-
-            if changed:
-                r, g, b = behavior.get_led_strip_color(group_emotion)
-                set_led_strip(r, g, b)
-                b_cfg = BEHAVIOR.get(group_emotion, BEHAVIOR.get("neutral", {}))
-                tag   = b_cfg.get("log_tag", group_emotion)
-                led   = b_cfg.get("led", "OFF")
-                buz   = b_cfg.get("buzzer")
-                lcd1  = b_cfg.get("lcd_line1", "")
-                lcd2  = b_cfg.get("lcd_line2", "")
-                print(
-                    f"[Behavior→Arduino] faces={face_count} "
-                    f"group={tag:10s} conf={group_conf:.0%} "
-                    f"LED={led} strip=RGB({r},{g},{b}) "
-                    f"buzzer={buz} lcd=({lcd1!r}, {lcd2!r})"
-                )
-
-            # Actualizar renderizador visual (SimulatedEyes, pantalla local)
-            gaze_x_v = (primary["cx"] - FRAME_W / 2) / (FRAME_W / 2)
-            gaze_y_v = (primary["cy"] - FRAME_H / 2) / (FRAME_H / 2)
-            visual_eyes.update(gaze_x_v, gaze_y_v, group_emotion)
-            if cam_servo:
-                cam_servo.track(primary["cx"], primary["cy"], FRAME_W, FRAME_H)
-
-        if frame_count % 30 == 0:
-            n_raw = len(boxes) if boxes is not None else 0
-            print(f"[Det] frame={frame_count} raw={n_raw} passed={face_count} "
-                  f"emotion={current_emotion} conf={current_conf:.0%}")
-
-        if face_count == 0:
-            # Sin cara detectada (boxes None o todas bajo el umbral)
-            behavior.apply("no_face")
-            visual_eyes.set_idle()
-            if cam_servo:
-                cam_servo.update_idle()
-            r, g, b = behavior.get_led_strip_color("no_face")
-            set_led_strip(r, g, b)
-            current_emotion = "no_face"
-            current_conf    = 0.0
-
-        # ── Componer ventana final ────────────────────────────────────────────
-        canvas = np.zeros((WIN_H, WIN_W, 3), dtype=np.uint8)
-
-        # Frame de cámara (izquierda)
-        canvas[:FRAME_H, :FRAME_W] = frame
-
-        # Ojos simulados (derecha) — renderizador visual local
-        eye_l, eye_r = visual_eyes.get_frames()
-
-        # Escalar ojos al tamaño de panel si es necesario
-        if eye_l.shape[0] != EYE_DISPLAY_SIZE:
-            eye_l = cv2.resize(eye_l, (EYE_DISPLAY_SIZE, EYE_DISPLAY_SIZE))
-            eye_r = cv2.resize(eye_r, (EYE_DISPLAY_SIZE, EYE_DISPLAY_SIZE))
-
-        # Bisel decorativo
-        _draw_eye_bezel(canvas, EYE_X, EYE_L_Y, EYE_DISPLAY_SIZE)
-        _draw_eye_bezel(canvas, EYE_X, EYE_R_Y, EYE_DISPLAY_SIZE)
-
-        # Pegar ojos en el canvas
-        canvas[EYE_L_Y:EYE_L_Y + EYE_DISPLAY_SIZE,
-               EYE_X:EYE_X + EYE_DISPLAY_SIZE] = eye_l
-        canvas[EYE_R_Y:EYE_R_Y + EYE_DISPLAY_SIZE,
-               EYE_X:EYE_X + EYE_DISPLAY_SIZE] = eye_r
-
-        # Separador vertical
-        canvas[:, FRAME_W:FRAME_W + 10] = (40, 40, 40)
-
-        # HUD cámara
-        hw_mode = "HW" if not hasattr(arduino._ser, "is_mock") or not arduino._ser.is_mock else "SIM"
-        # Nota: He añadido is_mock a MockSerial para facilitar esto
-        us_val  = f"{arduino.ultrasonic.distance_cm:.0f}cm"
-        hud = f"FPS:{fps:.0f}  Faces:{face_count}  US:{us_val}  [{hw_mode}] {current_emotion}"
-        cv2.putText(canvas, hud,
-                    (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
-
-        # Info emoción en panel de ojos
-        b_info  = BEHAVIOR.get(current_emotion, BEHAVIOR["neutral"])
-        tag_str = b_info.get("log_tag", current_emotion)
-        led_str = b_info.get("led", "OFF")
-        cv2.putText(canvas, tag_str,
-                    (EYE_X + 4, EYE_R_Y + EYE_DISPLAY_SIZE - 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1)
-        cv2.putText(canvas, f"conf={current_conf:.0%}  LED={led_str}",
-                    (EYE_X + 4, EYE_R_Y + EYE_DISPLAY_SIZE - 12),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.42, (160, 160, 160), 1)
-
-        out.write(canvas[:, :FRAME_W])   # solo el frame de cámara al vídeo
-
-        cv2.imshow("Robot Medico", canvas)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
-
-except KeyboardInterrupt:
-    print("\nDetenido.")
-
-finally:
-    if cam_servo:
-        cam_servo.close()
-    if _neck_serial_raw is not None:
-        _neck_serial_raw.close()
-    if arduino is not None:
-        arduino.stop()
-    cap.release()
-    out.release()
-    cv2.destroyAllWindows()
-    print(f"Vídeo guardado en {OUTPUT_PATH}")
+# La gestión de la ventana ha sido abstraída a RobotWindow (GUI/visual_eyes.py)
