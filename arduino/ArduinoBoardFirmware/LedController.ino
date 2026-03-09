@@ -15,21 +15,21 @@ void LedController::sanityTest()
     Serial.print(observerId);
     Serial.print(F(" ... "));
 
-    // Red
-    for (int i = 0; i < _numPixels; i++) _strip.setPixelColor(i, _strip.Color(255, 0, 0));
-    _strip.show();
+    this->handleCmdOff();
     delay(200);
-    // Green
-    for (int i = 0; i < _numPixels; i++) _strip.setPixelColor(i, _strip.Color(0, 255, 0));
-    _strip.show();
+    this->handleCmdOn();
     delay(200);
-    // Blue
-    for (int i = 0; i < _numPixels; i++) _strip.setPixelColor(i, _strip.Color(0, 0, 255));
-    _strip.show();
+    this->handleCmdColor("COLOR:255,0,0");
     delay(200);
-    // Off
-    _strip.clear();
-    _strip.show();
+    this->handleCmdRandom();
+    delay(200);
+    this->handleCmdBlink();
+    delay(200);
+    this->handleCmdBrightness("BRIGHTNESS:255");
+    delay(200);
+    this->handleCmdBrightness("BRIGHTNESS:50");
+    delay(200);
+    this->handleCmdOff();
 
     Serial.println(F("PASS"));
 }
@@ -89,9 +89,9 @@ void LedController::handleCmdColor(const String &command) {
 }
 
 void LedController::handleCmdRandom() {
-    _r = boundColor(_r + random(-20, 21));
-    _g = boundColor(_g + random(-20, 21));
-    _b = boundColor(_b + random(-20, 21));
+    _r = boundColor(random(0, 255));
+    _g = boundColor(random(0, 255));
+    _b = boundColor(random(0, 255));
     
     for (int i = 0; i < _numPixels; i++) _strip.setPixelColor(i, _strip.Color(_r, _g, _b));
     _strip.show();
@@ -102,7 +102,7 @@ void LedController::handleCmdBlink() {
     for (int i = 0; i < _numPixels; i++) {
         _strip.setPixelColor(i, _strip.Color(255, 255, 255));
         _strip.show();
-        delay(200);
+        delay(5);
         _strip.clear();   
         _strip.show();
     }
