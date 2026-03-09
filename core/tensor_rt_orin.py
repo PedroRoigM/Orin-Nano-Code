@@ -30,10 +30,11 @@ from facenet_pytorch import MTCNN
 import torch
 from time import time
 
-from processing.emotion_color_mapper import EmotionColorMapper
-from controllers.arduino_controller  import ArduinoController
-from controllers.gc9a01_controller   import GC9A01Controller
-from companion_behavior              import BehaviorEngine, BEHAVIOR
+from processing.emotion_color_mapper        import EmotionColorMapper
+from controllers.arduino_controller         import ArduinoController
+from controllers.gc9a01_controller          import GC9A01Controller
+from controllers.camera_servo_controller    import CameraServoController
+from companion_behavior                     import BehaviorEngine, BEHAVIOR
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuración
@@ -49,6 +50,9 @@ EMOTIONS = ["neutral", "happiness", "surprise", "sadness",
 ARDUINO_PORT         = "/dev/ttyACM0"
 ARDUINO_BAUD         = 9600
 ULTRASONIC_THRESHOLD = 10.0
+
+SERVO_PORT           = "/dev/ttyACM1"   # Puerto del Arduino con servos pan/tilt
+SERVO_BAUD           = 9600
 
 DEAD_ZONE_X = 60
 TURN_SPEED  = 45
@@ -172,6 +176,10 @@ arduino.start()
 
 # BehaviorEngine — pasa el adaptador SPI como controlador de ojos
 behavior = BehaviorEngine(arduino=arduino, eyes=eyes)
+
+# Servos pan/tilt de cámara
+cam_servo = CameraServoController(SERVO_PORT, SERVO_BAUD, verbose=False)
+cam_servo.center()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Callback de obstáculo ultrasónico
@@ -319,9 +327,11 @@ try:
                               f"| strip=RGB({r},{g},{b})")
 
                     drive_toward_face(face_cx, emotion)
+                    cam_servo.track(face_cx, face_cy, FRAME_W, FRAME_H)
 
         if face_count == 0:
             arduino.tank.stop()
+            cam_servo.update_idle()
             behavior.apply("no_face")
             r, g, b = behavior.get_led_strip_color("no_face")
             set_led_strip(r, g, b)
@@ -353,6 +363,7 @@ except KeyboardInterrupt:
 
 finally:
     _gc9a01.stop()
+    cam_servo.close()
     arduino.stop()
     cap.release()
     out.release()

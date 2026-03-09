@@ -37,10 +37,11 @@ from facenet_pytorch import MTCNN
 import torch
 from time import time
 
-from processing.emotion_color_mapper  import EmotionColorMapper
-from controllers.gc9a01_controller    import EyeRenderer, IRIS_COLOR_RGB, EYE_PARAMS
-from controllers.eyes_controller      import EyesController
-from companion_behavior               import BehaviorEngine, BEHAVIOR
+from processing.emotion_color_mapper      import EmotionColorMapper
+from controllers.gc9a01_controller        import EyeRenderer, IRIS_COLOR_RGB, EYE_PARAMS
+from controllers.eyes_controller          import EyesController
+from controllers.camera_servo_controller  import CameraServoController
+from companion_behavior                   import BehaviorEngine, BEHAVIOR
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Argumentos
@@ -61,9 +62,15 @@ OUTPUT_PATH           = "output.mp4"
 EMOTIONS = ["neutral", "happiness", "surprise", "sadness",
             "anger",   "disgust",   "fear",     "contempt"]
 
-ARDUINO_PORT         = 'COM13'          # None = auto-detectar; o forzar: "/dev/cu.usbmodemXXXX"
+ARDUINO_PORT         = None              # None = auto-detectar; o forzar: "/dev/cu.usbmodemXXXX"
 ARDUINO_BAUD         = 115200
 ULTRASONIC_THRESHOLD = 10.0
+
+# Puerto dedicado para los servos de cuello (Demo_neck o Arduino separado).
+# None = usar el mismo puerto del Arduino principal (producción, un solo Arduino).
+# Poner la ruta del puerto cuando el Arduino de cuello es un dispositivo separado.
+NECK_PORT = '/dev/cu.usbmodem2101'   # ej. '/dev/cu.usbmodem2101' o 'COM5'
+NECK_BAUD = 9600
 
 EYE_DISPLAY_SIZE = 240   # tamaño del cuadrado donde se renderiza cada ojo
 
@@ -195,6 +202,11 @@ class MockArduino:
         @property
         def is_blocked(self) -> bool:        return False
 
+    class _Neck:
+        """Puerto simulado para CameraServoController — mismo patrón que _PrintPort."""
+        def send_line(self, line: str) -> None:
+            print(f"[SERIAL →] {line.rstrip()}")
+
     def __init__(self) -> None:
         self.leds        = self._Leds()
         self.buzzer      = self._Buzzer()
@@ -205,6 +217,8 @@ class MockArduino:
         # toda la lógica del protocolo (EYES:EYES_1:... / GAZE:EYES_1:...)
         # vive en EyesController, no duplicada aquí.
         self.eyes        = EyesController(_PrintPort(), verbose=False)
+        # Puerto simulado para el controlador de cuello (mismo patrón que eyes)
+        self.neck_port   = self._Neck()
         self.on_obstacle = None
 
     @property
@@ -422,6 +436,60 @@ class SimulatedEyes:
 visual_eyes = SimulatedEyes()
 behavior    = BehaviorEngine(arduino=arduino, eyes=arduino.eyes)
 
+# Servos pan/tilt de cuello
+# ─────────────────────────────────────────────────────────────────────────────
+# · NECK_PORT definido  → Arduino de cuello separado (p.ej. Demo_neck).
+#   Se abre un puerto serie dedicado con _DirectSerialPort para no interferir
+#   con el ArduinoController principal (baud, protocolo y UltrasonicObserver).
+# · NECK_PORT = None    → producción (un solo Arduino): usa arduino._port /
+#   arduino.neck_port según si hay hardware real o MockArduino.
+# ─────────────────────────────────────────────────────────────────────────────
+_neck_serial_raw = None   # guardamos la referencia para cerrarlo en finally
+
+if NECK_PORT is not None:
+    # Arduino de cuello independiente — abre su propio puerto serial
+    class _DirectSerialPort:
+        """Wrapper mínimo sobre serial.Serial con la interfaz send_line()."""
+        def __init__(self, port: str, baud: int) -> None:
+            import serial as _serial
+            import time as _t
+            self._ser = _serial.Serial(port, baud, timeout=1)
+            _t.sleep(2.0)   # esperar reset del Arduino tras abrir el puerto
+            print(f"[CameraServo] Puerto directo en {port} @ {baud} baud")
+
+        def send_line(self, line: str) -> None:
+            if not line.endswith('\n'):
+                line += '\n'
+            try:
+                self._ser.write(line.encode('ascii'))
+                self._ser.flush()
+            except Exception as exc:
+                print(f"[CameraServo] Serial error: {exc}")
+
+        def close(self) -> None:
+            if self._ser.is_open:
+                self._ser.close()
+
+    try:
+        _direct = _DirectSerialPort(NECK_PORT, NECK_BAUD)
+        _neck_serial_raw = _direct   # para cerrarlo en finally
+        _neck_port = _direct
+        print(f"[CameraServo] Usando puerto dedicado {NECK_PORT}")
+    except Exception as _e:
+        print(f"[CameraServo] No se pudo abrir {NECK_PORT} ({_e}) — usando mock")
+        _neck_port = arduino.neck_port if isinstance(arduino, MockArduino) else arduino._port
+else:
+    # Un solo Arduino — compartir el puerto del ArduinoController
+    _neck_port = (
+        arduino.neck_port if isinstance(arduino, MockArduino)
+        else arduino._port
+    )
+    print("[CameraServo] Usando puerto compartido del Arduino principal.")
+
+cam_servo = CameraServoController(_neck_port, verbose=False)
+cam_servo.center()
+print("[CameraServo] Controlador de cuello listo.")
+
 # ---------------------------------------------------------------------------
 # Tira de LEDs NeoPixel — stub con log serial visible en PC
 # ---------------------------------------------------------------------------
@@ -562,6 +630,8 @@ try:
                     gaze_x_v = (face_cx - FRAME_W / 2) / (FRAME_W / 2)
                     gaze_y_v = (face_cy - FRAME_H / 2) / (FRAME_H / 2)
                     visual_eyes.update(gaze_x_v, gaze_y_v, emotion)
+                    if cam_servo:
+                        cam_servo.track(face_cx, face_cy, FRAME_W, FRAME_H)
 
         if frame_count % 30 == 0:
             n_raw = len(boxes) if boxes is not None else 0
@@ -572,6 +642,8 @@ try:
             # Sin cara detectada (boxes None o todas bajo el umbral)
             behavior.apply("no_face")
             visual_eyes.set_idle()
+            if cam_servo:
+                cam_servo.update_idle()
             r, g, b = behavior.get_led_strip_color("no_face")
             set_led_strip(r, g, b)
             current_emotion = "no_face"
@@ -632,6 +704,10 @@ except KeyboardInterrupt:
     print("\nDetenido.")
 
 finally:
+    if cam_servo:
+        cam_servo.close()
+    if _neck_serial_raw is not None:
+        _neck_serial_raw.close()
     if arduino is not None:
         arduino.stop()
     cap.release()
