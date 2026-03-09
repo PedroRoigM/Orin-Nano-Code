@@ -20,6 +20,8 @@ Ejemplo de uso:
     eyes.set_idle()
 """
 
+import time
+from typing import Optional
 from concurrent.futures import Future
 
 class EyesController:
@@ -45,23 +47,31 @@ class EyesController:
 
     def update(
         self,
-        gx_val: int,
-        gy_val: int,
-        r: int,
-        g: int,
-        b: int
+        gx: float,
+        gy: float,
+        emotion: str = "neutral",
+        iris_color_override: Optional[tuple[int, int, int]] = None
     ) -> Optional[Future]:
         """
         Envía posición + color al Arduino a ≤ GAZE_UPDATE_HZ Hz.
-        gx_val, gy_val: -100..100
+        gx, gy: float -1.0..1.0 (mapeado a -100..100)
         """
         now = time.monotonic()
         if now - self._last_gaze_t < 1.0 / self.GAZE_UPDATE_HZ:
             return None
         self._last_gaze_t = now
 
+        # Convertir float -1..1 a int -100..100 per protocol
+        gx_val = int(max(-1.0, min(1.0, gx)) * 100)
+        gy_val = int(max(-1.0, min(1.0, gy)) * 100)
+
         self._last_gx = gx_val
         self._last_gy = gy_val
+
+        # Obtener color (usar override o fallback a algo)
+        # Nota: EyesController no debería conocer BEHAVIOR, por lo que 
+        # iris_color_override es obligatorio o usamos un default.
+        r, g, b = iris_color_override if iris_color_override else (200, 200, 180)
 
         return self._send(f"{gx_val},{gy_val},{r},{g},{b}")
 

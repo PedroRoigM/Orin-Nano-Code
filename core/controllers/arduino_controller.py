@@ -77,9 +77,20 @@ class ArduinoController:
         verbose:                 bool  = False,
     ):
         # ── Puerto serial compartido ──────────────────────────────────────────
-        self._ser        = serial.Serial(port_name, baudrate, timeout=1)
-        print(f"[Arduino] Puerto abierto — esperando reset del Arduino (2 s)…")
-        time.sleep(2.0)   # el DTR activa el reset del Arduino; esperar a que arranque
+        if port_name.upper() == "MOCK":
+            from controllers.mock_serial import MockSerial
+            self._ser = MockSerial(port_name, baudrate)
+            print(f"[Arduino] Modo MOCK activado.")
+        else:
+            try:
+                self._ser = serial.Serial(port_name, baudrate, timeout=1)
+                print(f"[Arduino] Puerto abierto — esperando reset del Arduino (2 s)…")
+                time.sleep(2.0)   # el DTR activa el reset del Arduino; esperar a que arranque
+            except Exception as e:
+                print(f"[Arduino] Error al abrir {port_name}: {e}. Cayendo a modo MOCK.")
+                from controllers.mock_serial import MockSerial
+                self._ser = MockSerial("MOCK", baudrate)
+
         self._write_lock = threading.Lock()
         self._port       = SharedPort(self._ser, self._write_lock)
 
@@ -139,7 +150,7 @@ class ArduinoController:
         self.leds.off()
         self.buzzer.off()
         self.ultrasonic.stop()
-        if self._ser.is_open:
+        if hasattr(self._ser, "is_open") and self._ser.is_open:
             self._ser.close()
         print("[Arduino] Detenido y puerto cerrado.")
 

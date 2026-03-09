@@ -115,126 +115,6 @@ emotionMapper = EmotionColorMapper()
 # ---------------------------------------------------------------------------
 # MockArduino — simula la placa e imprime todos los comandos por terminal
 # ---------------------------------------------------------------------------
-class _PrintPort:
-    """
-    Puerto serial simulado para MockArduino.
-    Redirige send_line() a stdout con el prefijo [SERIAL →].
-    Permite reutilizar los controladores reales (EyesController, etc.)
-    sin hardware, manteniendo toda la lógica del protocolo en un único lugar.
-    """
-    def send_line(self, line: str) -> None:
-        print(f"[SERIAL →] {line}")
-
-
-class MockArduino:
-    """
-    Reemplaza ArduinoController cuando no hay hardware conectado.
-    Imprime en terminal cada comando que se enviaría al puerto serial,
-    con el formato exacto del protocolo — {BASE}:{ID}:{CMD}.
-
-    arduino.eyes usa EyesController real con _PrintPort, de modo que
-    toda la lógica del protocolo vive en el controlador, no aquí.
-    """
-
-    class _Leds:
-        def on(self):           print("[SERIAL →] LED:LED_1:ON")
-        def off(self):          print("[SERIAL →] LED:LED_1:OFF")
-        def blink(self):        print("[SERIAL →] LED:LED_1:BLINK")
-        def flash_alert(self):  print("[SERIAL →] LED:LED_1:BLINK  ← alerta")
-
-    class _Buzzer:
-        def tone(self, freq: int, ms: int):
-            print(f"[SERIAL →] BUZZ:BUZZ_1:{freq},{ms}")
-        def off(self):
-            print("[SERIAL →] BUZZ:BUZZ_1:OFF")
-        def beep(self, freq: int = 1000, duration_ms: int = 200):
-            print(f"[SERIAL →] BUZZ:BUZZ_1:{freq},{duration_ms}")
-        def startup_chime(self):
-            import time
-            for freq in (440, 660, 880):
-                print(f"[SERIAL →] BUZZ:BUZZ_1:{freq},120")
-                time.sleep(0.14)
-        def react_to_emotion(self, emotion: str):
-            _TONES = {
-                "neutral": (440, 100), "happiness": (880, 150),
-                "surprise": (660, 200), "sadness": (220, 500),
-                "anger": (150, 400),   "disgust": (180, 300),
-                "fear": (800, 80),     "contempt": (300, 250),
-            }
-            f, d = _TONES.get(emotion, (440, 100))
-            print(f"[SERIAL →] BUZZ:BUZZ_1:{f},{d}  ← emoción={emotion}")
-        def react_to_obstacle(self, distance_cm: float, threshold_cm: float = 10.0):
-            if distance_cm < 0 or distance_cm >= threshold_cm:
-                return
-            ratio = max(0.0, min(1.0, distance_cm / threshold_cm))
-            freq  = int(500 + (1 - ratio) * 1500)
-            dur   = int(50  + ratio * 150)
-            print(f"[SERIAL →] BUZZ:BUZZ_1:{freq},{dur}  ← obstáculo {distance_cm:.1f}cm")
-
-    class _Lcd:
-        def display_text(self, text: str, line: int = 0, col: int = 0):
-            print(f"[SERIAL →] LCD:LCD_1:{str(text)[:16]}")
-        def display_two_lines(self, top: str, bottom: str):
-            combined = f"{top[:8]} {bottom[:7]}"
-            print(f"[SERIAL →] LCD:LCD_1:{combined}")
-        def display_emotion(self, emotion: str, confidence: float):
-            print(f"[SERIAL →] LCD:LCD_1:{emotion[:10]} {confidence:.0%}")
-        def display_distance(self, cm: float):
-            if cm < 0:
-                print("[SERIAL →] LCD:LCD_1:US: sin dato")
-            else:
-                print(f"[SERIAL →] LCD:LCD_1:US: {cm:.1f} cm")
-        def clear(self):
-            print("[SERIAL →] LCD:LCD_1: ")
-
-    class _Tank:
-        def stop(self, **_):               print("[SERIAL →] MOT:MOT_1:STOP")
-        def forward(self, speed, **_):     print(f"[SERIAL →] MOT:MOT_1:FWD,{speed}")
-        def backward(self, speed, **_):    print(f"[SERIAL →] MOT:MOT_1:REV,{speed}")
-        def turn_left(self, speed, **_):   print(f"[SERIAL →] MOT:MOT_1:REV,{speed}  ← giro izq")
-        def turn_right(self, speed, **_):  print(f"[SERIAL →] MOT:MOT_1:FWD,{speed}  ← giro der")
-
-    class _Ultrasonic:
-        @property
-        def distance_cm(self) -> float:      return -1.0
-        @property
-        def is_front_blocked(self) -> bool:  return False
-        @property
-        def is_blocked(self) -> bool:        return False
-
-    class _Neck:
-        """Puerto simulado para CameraServoController — mismo patrón que _PrintPort."""
-        def send_line(self, line: str) -> None:
-            print(f"[SERIAL →] {line.rstrip()}")
-
-    def __init__(self) -> None:
-        self.leds        = self._Leds()
-        self.buzzer      = self._Buzzer()
-        self.lcd         = self._Lcd()
-        self.tank        = self._Tank()
-        self.ultrasonic  = self._Ultrasonic()
-        # EyesController real con puerto de impresión:
-        # toda la lógica del protocolo (EYES:EYES_1:... / GAZE:EYES_1:...)
-        # vive en EyesController, no duplicada aquí.
-        self.eyes        = EyesController(_PrintPort(), verbose=False)
-        # Puerto simulado para el controlador de cuello (mismo patrón que eyes)
-        self.neck_port   = self._Neck()
-        self.on_obstacle = None
-
-    @property
-    def can_move_forward(self)  -> bool: return True
-    @property
-    def can_move_backward(self) -> bool: return True
-    @property
-    def can_turn(self)          -> bool: return True
-
-    def start(self) -> None:
-        print("[MockArduino] Iniciado — modo simulación serial activo.")
-
-    def stop(self) -> None:
-        print("[MockArduino] Detenido.")
-
-
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # Detección automática del puerto Arduino
@@ -262,33 +142,28 @@ def _detect_arduino_port() -> str | None:
 
 # Arduino — real si está disponible, MockArduino en caso contrario
 # ---------------------------------------------------------------------------
-arduino: MockArduino | None = None
-try:
-    from controllers.arduino_controller import ArduinoController
-    _port = _detect_arduino_port()
-    if _port is None:
-        raise RuntimeError("No se encontró ningún Arduino conectado por USB")
-    _hw = ArduinoController(_port, ARDUINO_BAUD, ULTRASONIC_THRESHOLD)
-    _hw.start()
+arduino = None
+from controllers.arduino_controller import ArduinoController
 
-    def _on_obstacle(cm: float) -> None:
-        _hw.tank.stop()
-        _hw.leds.blink()
-        _hw.buzzer.react_to_obstacle(cm, ULTRASONIC_THRESHOLD)
-        print(f"[Obstacle] {cm:.1f} cm — motor detenido")
+_port = _detect_arduino_port() or "MOCK"
+arduino = ArduinoController(_port, ARDUINO_BAUD, ULTRASONIC_THRESHOLD)
 
-    _hw.on_obstacle = _on_obstacle
-    _hw.lcd.display_two_lines("Robot medico", "Listo :)")
-    _hw.buzzer.startup_chime()
-    _hw.leds.on()
-    arduino = _hw   # type: ignore[assignment]
+def _on_obstacle(cm: float) -> None:
+    arduino.tank.stop()
+    arduino.leds.blink()
+    # react_to_obstacle ya se llama internamente en ArduinoController vía EmotionManager
+    print(f"[Obstacle] {cm:.1f} cm — motor detenido")
+
+arduino.on_obstacle = _on_obstacle
+arduino.start()
+
+if _port != "MOCK":
+    arduino.lcd.display_two_lines("Robot medico", "Listo :)")
+    arduino.buzzer.startup_chime()
+    arduino.leds.on()
     print("[Arduino] Hardware conectado en", _port)
-
-except Exception as e:
-    print(f"[Arduino] Hardware no disponible ({e})")
-    print("[Arduino] Usando MockArduino — comandos seriales visibles en terminal.\n")
-    arduino = MockArduino()
-    arduino.start()
+else:
+    print("[Arduino] Usando modo MOCK — comandos seriales visibles en terminal.\n")
 
 
 # ---------------------------------------------------------------------------
@@ -480,10 +355,7 @@ if NECK_PORT is not None:
         _neck_port = arduino.neck_port if isinstance(arduino, MockArduino) else arduino._port
 else:
     # Un solo Arduino — compartir el puerto del ArduinoController
-    _neck_port = (
-        arduino.neck_port if isinstance(arduino, MockArduino)
-        else arduino._port
-    )
+    _neck_port = arduino._port
     print("[CameraServo] Usando puerto compartido del Arduino principal.")
 
 cam_servo = CameraServoController(_neck_port, verbose=False)
@@ -677,7 +549,8 @@ try:
         canvas[:, FRAME_W:FRAME_W + 10] = (40, 40, 40)
 
         # HUD cámara
-        hw_mode = "HW" if not isinstance(arduino, MockArduino) else "SIM"
+        hw_mode = "HW" if not hasattr(arduino._ser, "is_mock") or not arduino._ser.is_mock else "SIM"
+        # Nota: He añadido is_mock a MockSerial para facilitar esto
         us_val  = f"{arduino.ultrasonic.distance_cm:.0f}cm"
         hud = f"FPS:{fps:.0f}  Faces:{face_count}  US:{us_val}  [{hw_mode}] {current_emotion}"
         cv2.putText(canvas, hud,
