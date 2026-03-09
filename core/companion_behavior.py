@@ -309,7 +309,6 @@ class BehaviorEngine:
         b = BEHAVIOR.get(emotion, BEHAVIOR["neutral"])
         self._apply_leds(b)
         self._apply_buzzer(b)
-        self._apply_lcd(b)
         return True
 
     def apply_immediate(
@@ -327,7 +326,6 @@ class BehaviorEngine:
         self._update_eyes(emotion, gaze_x, gaze_y)
         self._apply_leds(b)
         self._apply_buzzer(b)
-        self._apply_lcd(b)
         self._prev_emotion = emotion
 
     def motor_should_pause(self, emotion: str) -> bool:
