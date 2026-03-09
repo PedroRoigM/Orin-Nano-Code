@@ -25,19 +25,17 @@ class LcdController:
 
     MAX_CHARS = 16   # columnas del LCD (según PinDeclaration.h: LCD_COLS = 16)
 
-    def __init__(self, port, verbose: bool = False):
+    def __init__(self, port, controller_id: str = "LCD_1", verbose: bool = False):
         self._port    = port
+        self._id      = controller_id
         self._verbose = verbose
 
     # ── API pública ──────────────────────────────────────────────────────────
 
     def display_text(self, text: str, line: int = 0, col: int = 0) -> None:
         """
-        Muestra texto en todos los LCDs.
-        Los parámetros `line` y `col` se mantienen por compatibilidad con el código
-        existente (tensor_rt.py, main.py) pero el firmware actual ignora line/col
-        y siempre escribe desde (0, 0).
-        El texto se trunca a MAX_CHARS caracteres.
+        Muestra texto en el LCD específico.
+        Los parámetros `line` y `col` se mantienen por compatibilidad.
         """
         try:
             if not text:
@@ -48,14 +46,13 @@ class LcdController:
             print(f"[LCD] ERROR: {e}")
 
     def clear(self) -> None:
-        """Limpia todos los LCDs (envía un espacio — cada escritura ya limpia)."""
+        """Limpia el LCD (envía un espacio — cada escritura ya limpia)."""
         self.display_text(" ")
 
     def display_two_lines(self, top: str, bottom: str) -> None:
         """
         Muestra dos líneas. Como el firmware actual solo soporta una línea,
-        se muestra 'top | bottom' truncado. Para soporte real de dos líneas
-        extender el firmware con un separador.
+        se muestra 'top | bottom' truncado.
         """
         combined = f"{top[:8]} {bottom[:7]}"
         self.display_text(combined)
@@ -74,7 +71,26 @@ class LcdController:
     # ── Interno ──────────────────────────────────────────────────────────────
 
     def _send(self, text: str) -> None:
-        line = f"LCD:{text}"
+        # Nuevo protocolo: {BASE_ID}:{SPECIFIC_ID}:{COMMAND}
+        line = f"LCD:{self._id}:{text}"
         if self._verbose:
             print(f"[LCD] → {line}")
         self._port.send_line(line)
+
+    # ── Unit Test ────────────────────────────────────────────────────────────
+
+    def test_interface(self) -> bool:
+        """
+        Prueba la interfaz enviando comandos básicos.
+        Retorna True si no hubo excepciones.
+        """
+        print(f"--- Testing LcdController ({self._id}) ---")
+        try:
+            self.clear()
+            self.display_text("Test Interface")
+            self.display_emotion("happy", 0.99)
+            print("[LCD] Test interface OK")
+            return True
+        except Exception as e:
+            print(f"[LCD] Test interface FAILED: {e}")
+            return False

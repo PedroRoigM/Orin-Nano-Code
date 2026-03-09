@@ -47,10 +47,12 @@ class UltrasonicObserver:
         ser: serial.Serial,
         threshold_cm: float = 10.0,
         write_port=None,          # SharedPort opcional para enviar PING
+        controller_id: str = "US_1",
         verbose_acks: bool = False,
         verbose_us:   bool = True,
     ):
         self._ser           = ser
+        self._id            = controller_id
         self.threshold_cm   = threshold_cm
         self._write_port    = write_port   # SharedPort para send_line("US:PING")
         self._verbose_acks  = verbose_acks
@@ -118,18 +120,31 @@ class UltrasonicObserver:
         """Alias de front_cm."""
         return self._distance_cm
 
-    # ── Acción: PING ──────────────────────────────────────────────────────────
-
     def ping(self) -> None:
         """
-        Envía "US:PING\n" al Arduino para solicitar una lectura inmediata.
-        El Arduino responde con "US_1:<cm>\n".
-        Solo funciona si write_port fue proporcionado al construir.
+        Envía "US:{id}:PING\n" al Arduino para solicitar una lectura inmediata.
         """
         if self._write_port is not None:
-            self._write_port.send_line("US:PING")
+            # Nuevo protocolo: {BASE_ID}:{SPECIFIC_ID}:{COMMAND}
+            self._write_port.send_line(f"US:{self._id}:PING")
         else:
-            print("[Ultrasonic] ping() ignorado — write_port no configurado")
+            print(f"[Ultrasonic] ping() ignorado para {self._id} — write_port no configurado")
+
+    # ── Unit Test ────────────────────────────────────────────────────────────
+
+    def test_interface(self) -> bool:
+        """
+        Prueba la interfaz enviando un PING (si write_port está configurado).
+        Retorna True si no hubo excepciones.
+        """
+        print(f"--- Testing UltrasonicObserver ({self._id}) ---")
+        try:
+            self.ping()
+            print("[Ultrasonic] Test interface OK")
+            return True
+        except Exception as e:
+            print(f"[Ultrasonic] Test interface FAILED: {e}")
+            return False
 
     # ── Hilo de escucha ───────────────────────────────────────────────────────
 

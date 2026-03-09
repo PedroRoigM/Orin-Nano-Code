@@ -38,15 +38,16 @@ class TankController:
         arduino.tank.stop()
     """
 
-    def __init__(self, port, verbose: bool = False):
+    def __init__(self, port, controller_id: str = "MOT_1", verbose: bool = False):
         self._port    = port
+        self._id      = controller_id
         self._verbose = verbose
 
     # ── API pública ──────────────────────────────────────────────────────────
 
     def stop(self, **_) -> None:
         """Detiene el motor."""
-        self._send("STOP,0")
+        self._send("STOP")
 
     def forward(self, speed: int = 100, **_) -> None:
         """Avanza. speed: 0-255."""
@@ -60,8 +61,6 @@ class TankController:
         """
         Giro a la izquierda.
         Con el firmware actual (un motor), se aproxima con REV.
-        Para giro real en tanque (rueda izq atrás, rueda der adelante)
-        extender el firmware con MOT_L y MOT_R independientes.
         """
         self._send(f"REV,{_clamp(speed)}")
 
@@ -74,11 +73,33 @@ class TankController:
 
     # ── Interno ──────────────────────────────────────────────────────────────
 
-    def _send(self, payload: str) -> None:
+    def _send(self, command: str) -> None:
         try:
-            line = f"MOT:{payload}"
+            # Nuevo protocolo: {BASE_ID}:{SPECIFIC_ID}:{COMMAND}
+            line = f"MOT:{self._id}:{command}"
             if self._verbose:
                 print(f"[MOT] → {line}")
             self._port.send_line(line)
         except Exception as e:
             print(f"[MOT] ERROR: {e}")
+
+    # ── Unit Test ────────────────────────────────────────────────────────────
+
+    def test_interface(self) -> bool:
+        """
+        Prueba la interfaz enviando comandos básicos.
+        Retorna True si no hubo excepciones.
+        """
+        print(f"--- Testing TankController ({self._id}) ---")
+        try:
+            self.stop()
+            self.forward(100)
+            self.backward(100)
+            self.turn_left(100)
+            self.turn_right(100)
+            self.stop()
+            print("[MOT] Test interface OK")
+            return True
+        except Exception as e:
+            print(f"[MOT] Test interface FAILED: {e}")
+            return False

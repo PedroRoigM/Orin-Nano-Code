@@ -86,17 +86,18 @@ class ArduinoController:
         self.ultrasonic = UltrasonicObserver(
             ser           = self._ser,
             threshold_cm  = ultrasonic_threshold_cm,
-            write_port    = self._port,   # para poder enviar US:PING
+            write_port    = self._port,
+            controller_id = "US_1",
             verbose_acks  = verbose,
             verbose_us    = True,
         )
 
         # ── Controladores de actuadores ───────────────────────────────────────
-        self.tank   = TankController(self._port,   verbose=verbose)
-        self.leds   = LedController(self._port,    verbose=verbose)
-        self.lcd    = LcdController(self._port,    verbose=verbose)
-        self.buzzer = BuzzerController(self._port,  verbose=verbose)
-        self.eyes   = EyesController(self._port,   verbose=True)
+        self.tank   = TankController(self._port,   controller_id="MOT_1",  verbose=verbose)
+        self.leds   = LedController(self._port,    controller_id="LED_1",  verbose=verbose)
+        self.lcd    = LcdController(self._port,    controller_id="LCD_1",  verbose=verbose)
+        self.buzzer = BuzzerController(self._port,  controller_id="BUZZ_1", verbose=verbose)
+        self.eyes   = EyesController(self._port,   controller_id="EYE_1",  verbose=verbose)
 
         # ── Callback de obstáculo (opcional) ──────────────────────────────────
         # Asignar una función para reacción automática al sensor:
@@ -109,6 +110,17 @@ class ArduinoController:
 
         print(f"[Arduino] Conectado en {port_name} @ {baudrate} baud | "
               f"umbral US: {ultrasonic_threshold_cm} cm")
+
+    def test_all_interfaces(self) -> None:
+        """Prueba la comunicación con todos los actuadores."""
+        print("\n--- INICIANDO PRUEBAS DE INTERFAZ ARDUINO ---")
+        self.ultrasonic.test_interface()
+        self.tank.test_interface()
+        self.leds.test_interface()
+        self.lcd.test_interface()
+        self.buzzer.test_interface()
+        self.eyes.test_interface()
+        print("--- PRUEBAS FINALIZADAS ---\n")
 
     # ── Ciclo de vida ─────────────────────────────────────────────────────────
 

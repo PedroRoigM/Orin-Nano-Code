@@ -39,8 +39,9 @@ class BuzzerController:
         "contempt":  (300,  250),
     }
 
-    def __init__(self, port, verbose: bool = False):
+    def __init__(self, port, controller_id: str = "BUZZ_1", verbose: bool = False):
         self._port    = port
+        self._id      = controller_id
         self._verbose = verbose
 
     # ── API principal ────────────────────────────────────────────────────────
@@ -53,7 +54,7 @@ class BuzzerController:
         """
         f = _clamp(freq,        20,    20_000)
         d = _clamp(duration_ms,  1,    30_000)
-        self._send(f"{f},{d}")
+        self._send(f"SOUND:{f},{d}")
 
     def off(self) -> None:
         """Detiene el tono activo."""
@@ -93,11 +94,31 @@ class BuzzerController:
 
     # ── Interno ──────────────────────────────────────────────────────────────
 
-    def _send(self, payload: str) -> None:
+    def _send(self, command: str) -> None:
         try:
-            line = f"BUZZ:{payload}"
+            # Nuevo protocolo: {BASE_ID}:{SPECIFIC_ID}:{COMMAND}
+            line = f"BUZZ:{self._id}:{command}"
             if self._verbose:
                 print(f"[BUZZ] → {line}")
             self._port.send_line(line)
         except Exception as e:
             print(f"[BUZZ] ERROR: {e}")
+
+    # ── Unit Test ────────────────────────────────────────────────────────────
+
+    def test_interface(self) -> bool:
+        """
+        Prueba la interfaz enviando comandos básicos.
+        Retorna True si no hubo excepciones.
+        """
+        print(f"--- Testing BuzzerController ({self._id}) ---")
+        try:
+            self.off()
+            self.beep()
+            self.tone(440, 100)
+            self.react_to_emotion("happiness")
+            print("[BUZZ] Test interface OK")
+            return True
+        except Exception as e:
+            print(f"[BUZZ] Test interface FAILED: {e}")
+            return False

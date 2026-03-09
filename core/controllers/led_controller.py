@@ -22,14 +22,15 @@ Respuesta del Arduino (ignorada en Python, solo logging si verbose=True):
 
 class LedController:
 
-    def __init__(self, port, verbose: bool = False):
+    def __init__(self, port, controller_id: str = "LED_1", verbose: bool = False):
         self._port    = port
+        self._id      = controller_id
         self._verbose = verbose
 
     # ── API pública ──────────────────────────────────────────────────────────
 
     def on(self) -> None:
-        """Enciende todos los LEDs."""
+        """Enciende todos los LEDs del controlador específico."""
         self._send("ON")
 
     def off(self) -> None:
@@ -39,6 +40,14 @@ class LedController:
     def blink(self) -> None:
         """Invierte el estado de todos los LEDs (toggle)."""
         self._send("BLINK")
+
+    def set_color(self, r: int, g: int, b: int) -> None:
+        """Establece el color de los LEDs (0-255)."""
+        self._send(f"COLOR:{r},{g},{b}")
+
+    def set_brightness(self, value: int) -> None:
+        """Establece el brillo global (0-255)."""
+        self._send(f"BRIGHTNESS:{value}")
 
     # ── Métodos de conveniencia para emociones ───────────────────────────────
 
@@ -62,11 +71,32 @@ class LedController:
 
     # ── Interno ──────────────────────────────────────────────────────────────
 
-    def _send(self, payload: str) -> None:
+    def _send(self, command: str) -> None:
         try:
-            line = f"LED:{payload}"
+            # Nuevo protocolo: {BASE_ID}:{SPECIFIC_ID}:{COMMAND}
+            line = f"LED:{self._id}:{command}"
             if self._verbose:
                 print(f"[LED] → {line}")
             self._port.send_line(line)
         except Exception as e:
             print(f"[LED] ERROR: {e}")
+
+    # ── Unit Test ────────────────────────────────────────────────────────────
+
+    def test_interface(self) -> bool:
+        """
+        Prueba la interfaz enviando comandos básicos.
+        Retorna True si no hubo excepciones.
+        """
+        print(f"--- Testing LedController ({self._id}) ---")
+        try:
+            self.off()
+            self.on()
+            self.set_color(255, 0, 0)
+            self.set_brightness(100)
+            self.blink()
+            print("[LED] Test interface OK")
+            return True
+        except Exception as e:
+            print(f"[LED] Test interface FAILED: {e}")
+            return False

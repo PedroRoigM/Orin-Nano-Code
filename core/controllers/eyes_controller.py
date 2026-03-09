@@ -42,8 +42,9 @@ class EyesController:
 
     GAZE_UPDATE_HZ: int = 30   # máx. actualizaciones/s
 
-    def __init__(self, port, verbose: bool = False) -> None:
+    def __init__(self, port, controller_id: str = "EYE_1", verbose: bool = False) -> None:
         self._port        = port
+        self._id          = controller_id
         self._verbose     = verbose
         self._last_gaze_t = 0.0
         self._last_gx     = 0
@@ -61,7 +62,6 @@ class EyesController:
     ) -> None:
         """
         Envía posición + color al Arduino a ≤ GAZE_UPDATE_HZ Hz.
-        El color viene de iris_color_override o del diccionario BEHAVIOR.
         """
         now = time.monotonic()
         if now - self._last_gaze_t < 1.0 / self.GAZE_UPDATE_HZ:
@@ -94,18 +94,43 @@ class EyesController:
         beh = BEHAVIOR.get("no_face", BEHAVIOR.get("neutral", {}))
         rgb = beh.get("eyes_rgb", _FALLBACK_RGB)
         r, g, b = int(rgb[0]), int(rgb[1]), int(rgb[2])
-        self._send(f"{self._last_gx},{self._last_gy},{r},{g},{b}")
+        self._send(f"0,0,{r},{g},{b}")
+
+    def set_color(self, r: int, g: int, b: int) -> None:
+        """Actualiza solo el color del iris."""
+        self._send(f"COLOR:{r},{g},{b}")
+
+    def set_shape(self, shape: str) -> None:
+        """Establece la forma de la pupila (circle, star, smiley, x)."""
+        self._send(f"SHAPE:{shape}")
 
     # ── Interno ───────────────────────────────────────────────────────────────
 
-    _COMPONENT_ID = "EYES_1"
-
-    def _send(self, payload: str) -> None:
-        """Envía EYE:EYES_1:payload\\n al Arduino."""
-        line = f"EYE:{self._COMPONENT_ID}:{payload}"
+    def _send(self, command: str) -> None:
+        """Envía EYE:{id}:command\\n al Arduino."""
+        line = f"EYE:{self._id}:{command}"
         if self._verbose:
-            print(f"[SERIAL →] {line}")
+            print(f"[EYE] → {line}")
         try:
             self._port.send_line(line)
         except Exception as e:
-            print(f"[Eyes] ERROR al enviar '{line}': {e}")
+            print(f"[EYE] ERROR: {e}")
+
+    # ── Unit Test ────────────────────────────────────────────────────────────
+
+    def test_interface(self) -> bool:
+        """
+        Prueba la interfaz enviando comandos básicos.
+        Retorna True si no hubo excepciones.
+        """
+        print(f"--- Testing EyesController ({self._id}) ---")
+        try:
+            self.set_idle()
+            self.update(0.1, -0.1, "happiness")
+            self.set_color(255, 255, 0)
+            self.set_shape("star")
+            print("[EYE] Test interface OK")
+            return True
+        except Exception as e:
+            print(f"[EYE] Test interface FAILED: {e}")
+            return False
