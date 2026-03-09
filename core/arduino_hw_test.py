@@ -50,68 +50,62 @@ def main():
     time.sleep(2.0)
 
     try:
-        # 1. LEDs (LED_1, LED_2)
+        # 1. LEDs
         separator("1. LED Test")
-        for led_id in ["LED_1", "LED_2"]:
+        for led_ctrl, led_id in [(arduino.led_1, "LED_1"), (arduino.led_2, "LED_2")]:
             step(f"Testing {led_id}")
-            arduino.leds._id = led_id # Manually switch for testing multiple instances
-            verify_future(arduino.leds.on())
+            verify_future(led_ctrl.on())
             time.sleep(0.5)
-            verify_future(arduino.leds.off())
+            verify_future(led_ctrl.off())
             time.sleep(0.5)
-            verify_future(arduino.leds.blink())
+            verify_future(led_ctrl.blink())
             time.sleep(1.0)
-            verify_future(arduino.leds.off())
-        arduino.leds._id = "LED_1" # Reset
+            verify_future(led_ctrl.off())
 
-        # 2. Buzzers (BUZZ_1, BUZZ_2)
+        # 2. Buzzers
         separator("2. Buzzer Test")
-        for buzz_id in ["BUZZ_1", "BUZZ_2"]:
+        for buzz_ctrl, buzz_id in [(arduino.buzzer_1, "BUZZ_1"), (arduino.buzzer_2, "BUZZ_2")]:
             step(f"Testing {buzz_id}")
-            arduino.buzzer._id = buzz_id
-            verify_future(arduino.buzzer.tone(440, 200))
+            verify_future(buzz_ctrl.tone(440, 200))
             time.sleep(0.3)
-            verify_future(arduino.buzzer.tone(880, 200))
+            verify_future(buzz_ctrl.tone(880, 200))
             time.sleep(0.3)
-            verify_future(arduino.buzzer.off())
+            verify_future(buzz_ctrl.off())
 
-        # 3. Motors (MOT_1, MOT_2, MOT_3, MOT_4)
+        # 3. Motors
         separator("3. Motor Test")
-        for mot_id in ["MOT_1", "MOT_2", "MOT_3", "MOT_4"]:
+        for mot_ctrl, mot_id in [(arduino.motor_1, "MOT_1"), (arduino.motor_2, "MOT_2"), (arduino.motor_3, "MOT_3"), (arduino.motor_4, "MOT_4")]:
             step(f"Testing {mot_id}")
-            arduino.tank._id = mot_id
-            verify_future(arduino.tank.forward(100))
+            verify_future(mot_ctrl.forward(100))
             time.sleep(0.5)
-            verify_future(arduino.tank.backward(100))
+            verify_future(mot_ctrl.backward(100))
             time.sleep(0.5)
-            verify_future(arduino.tank.stop())
+            verify_future(mot_ctrl.stop())
 
-        # 4. Ultrasound (US_1, US_2)
+        # 4. Ultrasound
         separator("4. Ultrasound Test")
-        for us_id in ["US_1", "US_2"]:
+        for us_ctrl, us_id in [(arduino.ultrasound_1, "US_1"), (arduino.ultrasound_2, "US_2")]:
             step(f"Testing {us_id}")
-            arduino.ultrasonic._id = us_id
-            # Send PING if the observer supports it (it should if mapped)
-            # Otherwise we just check if readings are coming in
             print(f"  Waiting for readings from {us_id}...")
             time.sleep(1.0)
-            dist = arduino.ultrasonic.distance_cm
+            dist = us_ctrl.distance_cm
             print(f"  Distance: {dist:.1f} cm")
 
-        # 5. Eyes (EYE_1)
+        # 5. Eyes
         separator("5. Eyes Test")
-        step("Testing EYE_1")
-        verify_future(arduino.eyes.set_color(255, 0, 0)) # Red
-        time.sleep(0.5)
-        verify_future(arduino.eyes.set_color(0, 255, 0)) # Green
-        time.sleep(0.5)
-        verify_future(arduino.eyes.set_shape("star"))
-        time.sleep(1.0)
-        verify_future(arduino.eyes.set_shape("circle"))
-        time.sleep(0.5)
-        verify_future(arduino.eyes.update(0, 0, 255)) # Blue gaze
-        time.sleep(1.0)
-        verify_future(arduino.eyes.set_idle())
+        for eye_ctrl, eye_id in [(arduino.eyes_1, "EYE_1"), (arduino.eyes_2, "EYE_2")]:
+            step(f"Testing {eye_id}")
+            verify_future(eye_ctrl.set_color(255, 0, 0)) # Red
+            time.sleep(0.5)
+            verify_future(eye_ctrl.set_color(0, 255, 0)) # Green
+            time.sleep(0.5)
+            verify_future(eye_ctrl.set_shape("star"))
+            time.sleep(1.0)
+            verify_future(eye_ctrl.set_shape("circle"))
+            time.sleep(0.5)
+            verify_future(eye_ctrl.update(0, 0, 255)) # Blue gaze
+            time.sleep(1.0)
+            verify_future(eye_ctrl.set_idle())
 
     finally:
         arduino.stop()

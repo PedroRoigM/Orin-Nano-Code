@@ -39,7 +39,6 @@ import torch
 from time import time
 
 from processing.emotion_color_mapper      import EmotionColorMapper
-from controllers.gc9a01_controller        import EyeRenderer, IRIS_COLOR_RGB, EYE_PARAMS
 from controllers.eyes_controller          import EyesController
 from controllers.camera_servo_controller  import CameraServoController
 from companion_behavior                   import BehaviorEngine, BEHAVIOR

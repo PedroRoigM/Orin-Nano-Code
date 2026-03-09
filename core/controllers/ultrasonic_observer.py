@@ -34,6 +34,30 @@ import time
 from typing import Optional
 
 
+class UltrasoundSensor:
+    """Representa un único sensor ultrasónico lógico."""
+    def __init__(self, uid: str, threshold_cm: float, write_port=None):
+        self.id = uid
+        self.threshold_cm = threshold_cm
+        self._distance_cm = -1.0
+        self._blocked = threading.Event()
+        self._write_port = write_port
+
+    @property
+    def distance_cm(self) -> float:
+        return self._distance_cm
+
+    @property
+    def is_blocked(self) -> bool:
+        return self._blocked.is_set()
+
+    def ping(self) -> None:
+        if self._write_port is not None:
+            self._write_port.send_line(f"US:{self.id}:PING")
+        else:
+            print(f"[Ultrasonic] ping() ignorado para {self.id} — write_port no configurado")
+
+
 class UltrasonicObserver:
     """
     Hilo daemon que escucha el puerto serial del nuevo firmware y:
@@ -58,7 +82,11 @@ class UltrasonicObserver:
         self._verbose_acks  = verbose_acks
         self._verbose_us    = verbose_us
 
-        # Estado del sensor ultrasónico (1 sensor en el nuevo firmware)
+        # Estado de los sensores ultrasónicos
+        self.sensor_1 = UltrasoundSensor("US_1", threshold_cm, write_port)
+        self.sensor_2 = UltrasoundSensor("US_2", threshold_cm, write_port)
+
+        # Estado legacy (apunta al sensor 1 por compatibilidad)
         self._distance_cm: float  = -1.0
         self._blocked             = threading.Event()
         self._stop                = threading.Event()
@@ -122,13 +150,9 @@ class UltrasonicObserver:
 
     def ping(self) -> None:
         """
-        Envía "US:{id}:PING\n" al Arduino para solicitar una lectura inmediata.
+        Envía "US:{id}:PING\n" al Arduino para solicitar una lectura inmediata (legacy US_1).
         """
-        if self._write_port is not None:
-            # Nuevo protocolo: {BASE_ID}:{SPECIFIC_ID}:{COMMAND}
-            self._write_port.send_line(f"US:{self._id}:PING")
-        else:
-            print(f"[Ultrasonic] ping() ignorado para {self._id} — write_port no configurado")
+        self.sensor_1.ping()
 
     # ── Unit Test ────────────────────────────────────────────────────────────
 
@@ -217,24 +241,33 @@ class UltrasonicObserver:
             print(f"[Arduino←] {line}")
 
     def _handle_us(self, controller_id: str, payload: str) -> None:
-        """Procesa una lectura ultrasónica: 'US_1:<cm>'."""
+        """Procesa una lectura ultrasónica: 'US_1:<cm>' o 'US_2:<cm>'."""
         try:
             cm = float(payload)
         except ValueError:
             return
 
-        self._distance_cm = cm
+        sensor = self.sensor_1 if controller_id == "US_1" else self.sensor_2 if controller_id == "US_2" else None
+        if not sensor:
+            return
 
-        # Actualizar bandera de bloqueo
-        was_blocked = self._blocked.is_set()
-        if cm > 0 and cm < self.threshold_cm:
+        sensor._distance_cm = cm
+        was_blocked = sensor.is_blocked
+
+        if cm > 0 and cm < sensor.threshold_cm:
             if not was_blocked and self._verbose_us:
                 print(
                     f"[Ultrasonic] {controller_id} BLOQUEADO — "
-                    f"{cm:.1f} cm < {self.threshold_cm} cm"
+                    f"{cm:.1f} cm < {sensor.threshold_cm} cm"
                 )
-            self._blocked.set()
+            sensor._blocked.set()
+            if controller_id == "US_1":
+                self._distance_cm = cm
+                self._blocked.set()
         else:
             if was_blocked and self._verbose_us:
                 print(f"[Ultrasonic] {controller_id} despejado — {cm:.1f} cm")
-            self._blocked.clear()
+            sensor._blocked.clear()
+            if controller_id == "US_1":
+                self._distance_cm = cm
+                self._blocked.clear()

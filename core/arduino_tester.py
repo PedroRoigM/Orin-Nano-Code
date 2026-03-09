@@ -120,33 +120,7 @@ time.sleep(0.4)
 ok("LED test done")
 
 
-# ── 3. LCD ────────────────────────────────────────────────────────────────────
-separator("3 · LCD CONTROLLER")
 
-step("clear()")
-arduino.lcd.clear()
-time.sleep(0.4)
-
-step('display_text("Hola Mundo!",  line=0)')
-arduino.lcd.display_text("Hola Mundo!", line=0)
-time.sleep(0.5)
-
-step('display_text("Test OK",  line=1)')
-arduino.lcd.display_text("Test OK", line=1)
-time.sleep(0.8)
-
-step('display_text("Col offset",  line=0, col=5)')
-arduino.lcd.display_text("Col offset", line=0, col=5)
-time.sleep(0.8)
-
-step('display_two_lines("Arduino", "Funcionando")')
-arduino.lcd.display_two_lines("Arduino", "Funcionando")
-time.sleep(1.0)
-
-step("clear()")
-arduino.lcd.clear()
-time.sleep(0.4)
-ok("LCD test done")
 
 
 # ── 4. Tank ───────────────────────────────────────────────────────────────────

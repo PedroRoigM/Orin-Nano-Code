@@ -38,7 +38,6 @@ import torch
 from time import time
 
 from processing.emotion_color_mapper      import EmotionColorMapper
-from controllers.gc9a01_controller        import EyeRenderer, IRIS_COLOR_RGB, EYE_PARAMS
 from controllers.eyes_controller          import EyesController
 from controllers.camera_servo_controller  import CameraServoController
 from companion_behavior                   import BehaviorEngine, BEHAVIOR
@@ -171,22 +170,6 @@ class MockArduino:
             dur   = int(50  + ratio * 150)
             print(f"[SERIAL →] BUZZ:BUZZ_1:{freq},{dur}  ← obstáculo {distance_cm:.1f}cm")
 
-    class _Lcd:
-        def display_text(self, text: str, line: int = 0, col: int = 0):
-            print(f"[SERIAL →] LCD:LCD_1:{str(text)[:16]}")
-        def display_two_lines(self, top: str, bottom: str):
-            combined = f"{top[:8]} {bottom[:7]}"
-            print(f"[SERIAL →] LCD:LCD_1:{combined}")
-        def display_emotion(self, emotion: str, confidence: float):
-            print(f"[SERIAL →] LCD:LCD_1:{emotion[:10]} {confidence:.0%}")
-        def display_distance(self, cm: float):
-            if cm < 0:
-                print("[SERIAL →] LCD:LCD_1:US: sin dato")
-            else:
-                print(f"[SERIAL →] LCD:LCD_1:US: {cm:.1f} cm")
-        def clear(self):
-            print("[SERIAL →] LCD:LCD_1: ")
-
     class _Tank:
         def stop(self, **_):               print("[SERIAL →] MOT:MOT_1:STOP")
         def forward(self, speed, **_):     print(f"[SERIAL →] MOT:MOT_1:FWD,{speed}")
@@ -210,7 +193,6 @@ class MockArduino:
     def __init__(self) -> None:
         self.leds        = self._Leds()
         self.buzzer      = self._Buzzer()
-        self.lcd         = self._Lcd()
         self.tank        = self._Tank()
         self.ultrasonic  = self._Ultrasonic()
         # EyesController real con puerto de impresión:
@@ -278,7 +260,6 @@ try:
         print(f"[Obstacle] {cm:.1f} cm — motor detenido")
 
     _hw.on_obstacle = _on_obstacle
-    _hw.lcd.display_two_lines("Robot medico", "Listo :)")
     _hw.buzzer.startup_chime()
     _hw.leds.on()
     arduino = _hw   # type: ignore[assignment]

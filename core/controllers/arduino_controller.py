@@ -35,7 +35,21 @@ Reacción automática al ultrasónico:
 import serial
 import threading
 import time
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
+
+class MultiControllerProxy:
+    """Wrapper para enviar el mismo comando a múltiples controladores."""
+    def __init__(self, controllers: list):
+        self._controllers = controllers
+
+    def __getattr__(self, name: str) -> Any:
+        attr = getattr(self._controllers[0], name)
+        if callable(attr):
+            def wrapper(*args, **kwargs):
+                return [getattr(c, name)(*args, **kwargs) for c in self._controllers]
+            return wrapper
+        else:
+            return [getattr(c, name) for c in self._controllers]
 
 from controllers.shared_port          import SharedPort
 from controllers.ultrasonic_observer  import UltrasonicObserver
@@ -72,7 +86,7 @@ class ArduinoController:
     def __init__(
         self,
         port_name:               str,
-        baudrate:                int   = 9600,
+        baudrate:                int   = 115200,
         ultrasonic_threshold_cm: float = 10.0,
         verbose:                 bool  = False,
     ):
@@ -84,8 +98,8 @@ class ArduinoController:
         else:
             try:
                 self._ser = serial.Serial(port_name, baudrate, timeout=1)
-                print(f"[Arduino] Puerto abierto — esperando reset del Arduino (2 s)…")
-                time.sleep(2.0)   # el DTR activa el reset del Arduino; esperar a que arranque
+                print(f"[Arduino] Puerto abierto — esperando reset del Arduino (10 s)…")
+                time.sleep(10.0)   # el DTR activa el reset del Arduino; esperar a que arranque
             except Exception as e:
                 print(f"[Arduino] Error al abrir {port_name}: {e}. Cayendo a modo MOCK.")
                 from controllers.mock_serial import MockSerial
@@ -103,13 +117,27 @@ class ArduinoController:
             verbose_acks  = verbose,
             verbose_us    = True,
         )
+        self.ultrasound_1 = self.ultrasonic.sensor_1
+        self.ultrasound_2 = self.ultrasonic.sensor_2
 
         # ── Controladores de actuadores ───────────────────────────────────────
-        self.tank   = TankController(self._port,   controller_id="MOT_1",  verbose=verbose)
-        self.leds   = LedController(self._port,    controller_id="LED_1",  verbose=verbose)
-        self.lcd    = LcdController(self._port,    controller_id="LCD_1",  verbose=verbose)
-        self.buzzer = BuzzerController(self._port,  controller_id="BUZZ_1", verbose=verbose)
-        self.eyes   = EyesController(self._port,   controller_id="EYE_1",  verbose=verbose)
+        self.motor_1 = TankController(self._port, controller_id="MOT_1", verbose=verbose)
+        self.motor_2 = TankController(self._port, controller_id="MOT_2", verbose=verbose)
+        self.motor_3 = TankController(self._port, controller_id="MOT_3", verbose=verbose)
+        self.motor_4 = TankController(self._port, controller_id="MOT_4", verbose=verbose)
+        self.tank    = self.motor_1
+
+        self.led_1 = LedController(self._port, controller_id="LED_1", verbose=verbose)
+        self.led_2 = LedController(self._port, controller_id="LED_2", verbose=verbose)
+        self.leds  = MultiControllerProxy([self.led_1, self.led_2])
+
+        self.buzzer_1 = BuzzerController(self._port, controller_id="BUZZ_1", verbose=verbose)
+        self.buzzer_2 = BuzzerController(self._port, controller_id="BUZZ_2", verbose=verbose)
+        self.buzzer   = MultiControllerProxy([self.buzzer_1, self.buzzer_2])
+
+        self.eyes_1 = EyesController(self._port, controller_id="EYE_1", verbose=verbose)
+        self.eyes_2 = EyesController(self._port, controller_id="EYE_2", verbose=verbose)
+        self.eyes   = MultiControllerProxy([self.eyes_1, self.eyes_2])
 
         # ── Gestor de emociones y comportamiento (desacoplado) ────────────────
         self.emotions = EmotionManager(self)
@@ -130,9 +158,11 @@ class ArduinoController:
         """Prueba la comunicación con todos los actuadores."""
         print("\n--- INICIANDO PRUEBAS DE INTERFAZ ARDUINO ---")
         self.ultrasonic.test_interface()
-        self.tank.test_interface()
+        self.motor_1.test_interface()
+        self.motor_2.test_interface()
+        self.motor_3.test_interface()
+        self.motor_4.test_interface()
         self.leds.test_interface()
-        self.lcd.test_interface()
         self.buzzer.test_interface()
         self.eyes.test_interface()
         print("--- PRUEBAS FINALIZADAS ---\n")
@@ -181,12 +211,12 @@ class ArduinoController:
         return self.emotions.apply_emotion(emotion, confidence)
 
     def display_sensor_info(self) -> None:
-        """Muestra la distancia del sensor en el LCD (formateado)."""
-        cm = self.ultrasonic.distance_cm
+        """Muestra la distancia del sensor (solo log, LCD eliminado)."""
+        cm = self.ultrasound_1.distance_cm
         if cm < 0:
-            self.lcd.display_text("US: sin dato")
+            print("[Arduino] US_1: sin dato")
         else:
-            self.lcd.display_text(f"US: {cm:.1f} cm")
+            print(f"[Arduino] US_1: {cm:.1f} cm")
 
     # ── Callback de obstáculo ─────────────────────────────────────────────────
 
