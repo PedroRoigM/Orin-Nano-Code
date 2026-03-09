@@ -182,6 +182,11 @@ class UltrasonicObserver:
         controller_id = line[:colon]       # e.g.  "US_1", "LED_2", "MOT_1"
         payload       = line[colon + 1:]   # e.g.  "42", "STATE:ON", "DIR:FWD,SPD:80"
 
+        # ── Resolve pending Promises in SharedPort ────────────────────────────
+        if self._write_port is not None:
+            # SharedPort matches the controller_id to the oldest pending Future
+            self._write_port.resolve_response(controller_id, payload)
+
         # ── Sensor ultrasónico ────────────────────────────────────────────────
         if controller_id.startswith("US"):
             self._handle_us(controller_id, payload)

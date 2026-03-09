@@ -23,6 +23,8 @@ Respuesta del Arduino:
 """
 
 
+from concurrent.futures import Future
+
 def _clamp(v: int, lo: int = 0, hi: int = 255) -> int:
     return max(lo, min(hi, int(v)))
 
@@ -45,61 +47,56 @@ class TankController:
 
     # ── API pública ──────────────────────────────────────────────────────────
 
-    def stop(self, **_) -> None:
+    def stop(self, **_) -> Future:
         """Detiene el motor."""
-        self._send("STOP")
+        return self._send("STOP")
 
-    def forward(self, speed: int = 100, **_) -> None:
+    def forward(self, speed: int = 100, **_) -> Future:
         """Avanza. speed: 0-255."""
-        self._send(f"FWD,{_clamp(speed)}")
+        return self._send(f"FWD,{_clamp(speed)}")
 
-    def backward(self, speed: int = 100, **_) -> None:
+    def backward(self, speed: int = 100, **_) -> Future:
         """Retrocede. speed: 0-255."""
-        self._send(f"REV,{_clamp(speed)}")
+        return self._send(f"REV,{_clamp(speed)}")
 
-    def turn_left(self, speed: int = 100, **_) -> None:
+    def turn_left(self, speed: int = 100, **_) -> Future:
         """
         Giro a la izquierda.
         Con el firmware actual (un motor), se aproxima con REV.
         """
-        self._send(f"REV,{_clamp(speed)}")
+        return self._send(f"REV,{_clamp(speed)}")
 
-    def turn_right(self, speed: int = 100, **_) -> None:
+    def turn_right(self, speed: int = 100, **_) -> Future:
         """
         Giro a la derecha.
         Con el firmware actual (un motor), se aproxima con FWD.
         """
-        self._send(f"FWD,{_clamp(speed)}")
+        return self._send(f"FWD,{_clamp(speed)}")
 
     # ── Interno ──────────────────────────────────────────────────────────────
 
-    def _send(self, command: str) -> None:
-        try:
-            # Nuevo protocolo: {BASE_ID}:{SPECIFIC_ID}:{COMMAND}
-            line = f"MOT:{self._id}:{command}"
-            if self._verbose:
-                print(f"[MOT] → {line}")
-            self._port.send_line(line)
-        except Exception as e:
-            print(f"[MOT] ERROR: {e}")
+    def _send(self, command: str) -> Future:
+        # Nuevo protocolo: {BASE_ID}:{SPECIFIC_ID}:{COMMAND}
+        line = f"MOT:{self._id}:{command}"
+        if self._verbose:
+            print(f"[MOT] → {line}")
+        return self._port.send_line(line)
 
     # ── Unit Test ────────────────────────────────────────────────────────────
 
     def test_interface(self) -> bool:
         """
         Prueba la interfaz enviando comandos básicos.
-        Retorna True si no hubo excepciones.
+        Retorna True si no hubo excepciones (las promesas pueden no estar resueltas).
         """
         print(f"--- Testing TankController ({self._id}) ---")
         try:
-            self.stop()
-            self.forward(100)
-            self.backward(100)
-            self.turn_left(100)
-            self.turn_right(100)
-            self.stop()
-            print("[MOT] Test interface OK")
+            self.stop().result(timeout=1.0)
+            self.forward(100).result(timeout=1.0)
+            self.backward(100).result(timeout=1.0)
+            self.stop().result(timeout=1.0)
+            print("[MOT] Test interface OK (ACKs received)")
             return True
         except Exception as e:
-            print(f"[MOT] Test interface FAILED: {e}")
+            print(f"[MOT] Test interface FAILED or TIMEOUT: {e}")
             return False

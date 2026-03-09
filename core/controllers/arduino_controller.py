@@ -44,6 +44,7 @@ from controllers.led_controller       import LedController
 from controllers.lcd_controller       import LcdController
 from controllers.buzzer_controller    import BuzzerController
 from controllers.eyes_controller      import EyesController
+from controllers.emotion_manager      import EmotionManager
 
 
 class ArduinoController:
@@ -98,6 +99,9 @@ class ArduinoController:
         self.lcd    = LcdController(self._port,    controller_id="LCD_1",  verbose=verbose)
         self.buzzer = BuzzerController(self._port,  controller_id="BUZZ_1", verbose=verbose)
         self.eyes   = EyesController(self._port,   controller_id="EYE_1",  verbose=verbose)
+
+        # ── Gestor de emociones y comportamiento (desacoplado) ────────────────
+        self.emotions = EmotionManager(self)
 
         # ── Callback de obstáculo (opcional) ──────────────────────────────────
         # Asignar una función para reacción automática al sensor:
@@ -158,20 +162,20 @@ class ArduinoController:
 
     # ── Helpers de conveniencia ───────────────────────────────────────────────
 
-    def react_to_emotion(self, emotion: str, confidence: float = 1.0) -> None:
+    def react_to_emotion(self, emotion: str, confidence: float = 1.0) -> list:
         """
-        Reacciona a una emoción detectada en todos los actuadores:
-          · LED: on/blink/off según la emoción
-          · LCD: muestra la emoción y confianza
-          · Buzzer: tono asociado a la emoción
+        Reacciona a una emoción delegando al EmotionManager.
+        Retorna la lista de Futures de los comandos enviados.
         """
-        self.leds.set_emotion(emotion)
-        self.lcd.display_emotion(emotion, confidence)
-        self.buzzer.react_to_emotion(emotion)
+        return self.emotions.apply_emotion(emotion, confidence)
 
     def display_sensor_info(self) -> None:
-        """Muestra la distancia del sensor en el LCD."""
-        self.lcd.display_distance(self.ultrasonic.distance_cm)
+        """Muestra la distancia del sensor en el LCD (formateado)."""
+        cm = self.ultrasonic.distance_cm
+        if cm < 0:
+            self.lcd.display_text("US: sin dato")
+        else:
+            self.lcd.display_text(f"US: {cm:.1f} cm")
 
     # ── Callback de obstáculo ─────────────────────────────────────────────────
 
@@ -190,10 +194,16 @@ class ArduinoController:
             was_blocked = observer.is_blocked
             original_handle_us(ctrl_id, pl)
             now_blocked = observer.is_blocked
-            # Flanco ascendente: acaba de bloquearse
+            cm = observer.distance_cm
+
+            # Reacción automática de bajo nivel (zumbido) vía EmotionManager
+            if now_blocked:
+                self.emotions.react_to_obstacle(cm)
+
+            # Reacción de alto nivel (callback definido por el usuario)
             if not was_blocked and now_blocked and self.on_obstacle is not None:
                 try:
-                    self.on_obstacle(observer.distance_cm)
+                    self.on_obstacle(cm)
                 except Exception as e:
                     print(f"[Arduino] Error en on_obstacle callback: {e}")
 

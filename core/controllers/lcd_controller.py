@@ -21,6 +21,8 @@ Para multi-línea extender el firmware con soporte de separador (p.ej. '|').
 """
 
 
+from concurrent.futures import Future
+
 class LcdController:
 
     MAX_CHARS = 16   # columnas del LCD (según PinDeclaration.h: LCD_COLS = 16)
@@ -32,65 +34,50 @@ class LcdController:
 
     # ── API pública ──────────────────────────────────────────────────────────
 
-    def display_text(self, text: str, line: int = 0, col: int = 0) -> None:
+    def display_text(self, text: str, line: int = 0, col: int = 0) -> Future:
         """
         Muestra texto en el LCD específico.
         Los parámetros `line` y `col` se mantienen por compatibilidad.
         """
-        try:
-            if not text:
-                text = " "
-            safe = str(text)[:self.MAX_CHARS].replace('\n', ' ').replace('\r', '')
-            self._send(safe)
-        except Exception as e:
-            print(f"[LCD] ERROR: {e}")
+        if not text:
+            text = " "
+        safe = str(text)[:self.MAX_CHARS].replace('\n', ' ').replace('\r', '')
+        return self._send(safe)
 
-    def clear(self) -> None:
+    def clear(self) -> Future:
         """Limpia el LCD (envía un espacio — cada escritura ya limpia)."""
-        self.display_text(" ")
+        return self.display_text(" ")
 
-    def display_two_lines(self, top: str, bottom: str) -> None:
+    def display_two_lines(self, top: str, bottom: str) -> Future:
         """
         Muestra dos líneas. Como el firmware actual solo soporta una línea,
         se muestra 'top | bottom' truncado.
         """
         combined = f"{top[:8]} {bottom[:7]}"
-        self.display_text(combined)
-
-    def display_emotion(self, emotion: str, confidence: float) -> None:
-        """Atajo para mostrar la emoción detectada y su confianza."""
-        self.display_text(f"{emotion[:10]} {confidence:.0%}")
-
-    def display_distance(self, distance_cm: float) -> None:
-        """Atajo para mostrar la lectura del sensor ultrasónico."""
-        if distance_cm < 0:
-            self.display_text("US: sin dato")
-        else:
-            self.display_text(f"US: {distance_cm:.1f} cm")
+        return self.display_text(combined)
 
     # ── Interno ──────────────────────────────────────────────────────────────
 
-    def _send(self, text: str) -> None:
+    def _send(self, text: str) -> Future:
         # Nuevo protocolo: {BASE_ID}:{SPECIFIC_ID}:{COMMAND}
         line = f"LCD:{self._id}:{text}"
         if self._verbose:
             print(f"[LCD] → {line}")
-        self._port.send_line(line)
+        return self._port.send_line(line)
 
     # ── Unit Test ────────────────────────────────────────────────────────────
 
     def test_interface(self) -> bool:
         """
         Prueba la interfaz enviando comandos básicos.
-        Retorna True si no hubo excepciones.
+        Retorna True si no hubo excepciones (las promesas pueden no estar resueltas).
         """
         print(f"--- Testing LcdController ({self._id}) ---")
         try:
-            self.clear()
-            self.display_text("Test Interface")
-            self.display_emotion("happy", 0.99)
-            print("[LCD] Test interface OK")
+            self.clear().result(timeout=1.0)
+            self.display_text("Test Interface").result(timeout=1.0)
+            print("[LCD] Test interface OK (ACKs received)")
             return True
         except Exception as e:
-            print(f"[LCD] Test interface FAILED: {e}")
+            print(f"[LCD] Test interface FAILED or TIMEOUT: {e}")
             return False

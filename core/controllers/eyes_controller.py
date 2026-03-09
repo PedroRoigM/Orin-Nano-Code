@@ -20,23 +20,14 @@ Ejemplo de uso:
     eyes.set_idle()
 """
 
-import time
-from typing import Optional
-
-try:
-    from companion_behavior import BEHAVIOR
-    _FALLBACK_RGB = BEHAVIOR.get("neutral", {}).get("eyes_rgb", (200, 200, 180))
-except ImportError:
-    BEHAVIOR      = {}
-    _FALLBACK_RGB = (200, 200, 180)
-
+from concurrent.futures import Future
 
 class EyesController:
     """
     Controlador serial para las pantallas oculares GC9A01 gestionadas por Arduino.
 
     Interfaz compatible con GC9A01Controller (intercambiable):
-      .update(gaze_x, gaze_y, emotion, confidence=1.0, iris_color_override=None)
+      .update(gx, gy, r, g, b)
       .set_idle()
     """
 
@@ -54,83 +45,61 @@ class EyesController:
 
     def update(
         self,
-        gaze_x:              float,
-        gaze_y:              float,
-        emotion:             str,
-        confidence:          float = 1.0,
-        iris_color_override: Optional[tuple] = None,
-    ) -> None:
+        gx_val: int,
+        gy_val: int,
+        r: int,
+        g: int,
+        b: int
+    ) -> Optional[Future]:
         """
         Envía posición + color al Arduino a ≤ GAZE_UPDATE_HZ Hz.
+        gx_val, gy_val: -100..100
         """
         now = time.monotonic()
         if now - self._last_gaze_t < 1.0 / self.GAZE_UPDATE_HZ:
-            return
+            return None
         self._last_gaze_t = now
 
-        # Color: override terapéutico si se provee, si no BEHAVIOR
-        if iris_color_override is not None:
-            r, g, b = (int(c) for c in iris_color_override)
-        else:
-            beh = BEHAVIOR.get(emotion, BEHAVIOR.get("neutral", {}))
-            rgb = beh.get("eyes_rgb", _FALLBACK_RGB)
-            r, g, b = int(rgb[0]), int(rgb[1]), int(rgb[2])
+        self._last_gx = gx_val
+        self._last_gy = gy_val
 
-        # Amplificación 1.8× — movimientos faciales pequeños → movimiento visible
-        gx = int(max(-100, min(100, round(gaze_x * 180))))
-        gy = int(max(-100, min(100, round(gaze_y * 180))))
-        self._last_gx = gx
-        self._last_gy = gy
+        return self._send(f"{gx_val},{gy_val},{r},{g},{b}")
 
-        self._send(f"{gx},{gy},{r},{g},{b}")
+    def set_idle(self) -> Future:
+        """Centra la mirada."""
+        return self._send(f"0,0,200,200,180")
 
-    def set_idle(self) -> None:
-        """Centra la mirada y aplica el color 'no_face'."""
-        now = time.monotonic()
-        if now - self._last_gaze_t < 1.0 / self.GAZE_UPDATE_HZ:
-            return
-        self._last_gaze_t = now
-
-        beh = BEHAVIOR.get("no_face", BEHAVIOR.get("neutral", {}))
-        rgb = beh.get("eyes_rgb", _FALLBACK_RGB)
-        r, g, b = int(rgb[0]), int(rgb[1]), int(rgb[2])
-        self._send(f"0,0,{r},{g},{b}")
-
-    def set_color(self, r: int, g: int, b: int) -> None:
+    def set_color(self, r: int, g: int, b: int) -> Future:
         """Actualiza solo el color del iris."""
-        self._send(f"COLOR:{r},{g},{b}")
+        return self._send(f"COLOR:{r},{g},{b}")
 
-    def set_shape(self, shape: str) -> None:
+    def set_shape(self, shape: str) -> Future:
         """Establece la forma de la pupila (circle, star, smiley, x)."""
-        self._send(f"SHAPE:{shape}")
+        return self._send(f"SHAPE:{shape}")
 
     # ── Interno ───────────────────────────────────────────────────────────────
 
-    def _send(self, command: str) -> None:
+    def _send(self, command: str) -> Future:
         """Envía EYE:{id}:command\\n al Arduino."""
         line = f"EYE:{self._id}:{command}"
         if self._verbose:
             print(f"[EYE] → {line}")
-        try:
-            self._port.send_line(line)
-        except Exception as e:
-            print(f"[EYE] ERROR: {e}")
+        return self._port.send_line(line)
 
     # ── Unit Test ────────────────────────────────────────────────────────────
 
     def test_interface(self) -> bool:
         """
         Prueba la interfaz enviando comandos básicos.
-        Retorna True si no hubo excepciones.
+        Retorna True si no hubo excepciones (las promesas pueden no estar resueltas).
         """
         print(f"--- Testing EyesController ({self._id}) ---")
         try:
-            self.set_idle()
-            self.update(0.1, -0.1, "happiness")
-            self.set_color(255, 255, 0)
-            self.set_shape("star")
-            print("[EYE] Test interface OK")
+            self.set_idle().result(timeout=1.0)
+            self.set_color(255, 255, 0).result(timeout=1.0)
+            self.set_shape("star").result(timeout=1.0)
+            print("[EYE] Test interface OK (ACKs received)")
             return True
         except Exception as e:
-            print(f"[EYE] Test interface FAILED: {e}")
+            print(f"[EYE] Test interface FAILED or TIMEOUT: {e}")
             return False

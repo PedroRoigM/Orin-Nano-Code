@@ -21,23 +21,11 @@ Integración con emociones:
 """
 
 
-def _clamp(v: int, lo: int, hi: int) -> int:
-    return max(lo, min(hi, int(v)))
+from concurrent.futures import Future
+
 
 
 class BuzzerController:
-
-    # Parámetros de tono por emoción (freq_hz, duration_ms)
-    _EMOTION_TONES: dict[str, tuple[int, int]] = {
-        "neutral":   (440,  100),
-        "happiness": (880,  150),
-        "surprise":  (660,  200),
-        "sadness":   (220,  500),
-        "anger":     (150,  400),
-        "disgust":   (180,  300),
-        "fear":      (800,   80),   # beep corto y agudo
-        "contempt":  (300,  250),
-    }
 
     def __init__(self, port, controller_id: str = "BUZZ_1", verbose: bool = False):
         self._port    = port
@@ -46,79 +34,62 @@ class BuzzerController:
 
     # ── API principal ────────────────────────────────────────────────────────
 
-    def tone(self, freq: int, duration_ms: int) -> None:
+    def tone(self, freq: int, duration_ms: int) -> Future:
         """
         Reproduce un tono.
         freq:        Hz (20-20000)
         duration_ms: milisegundos (1-30000)
         """
-        f = _clamp(freq,        20,    20_000)
-        d = _clamp(duration_ms,  1,    30_000)
-        self._send(f"SOUND:{f},{d}")
+        f = self._clamp(freq,        20,    20_000)
+        d = self._clamp(duration_ms,  1,    30_000)
+        return self._send(f"SOUND:{f},{d}")
 
-    def off(self) -> None:
+    def off(self) -> Future:
         """Detiene el tono activo."""
-        self._send("OFF")
+        return self._send("OFF")
 
     # ── Métodos de conveniencia ───────────────────────────────────────────────
 
-    def beep(self, freq: int = 1000, duration_ms: int = 200) -> None:
+    def beep(self, freq: int = 1000, duration_ms: int = 200) -> Future:
         """Pitido corto genérico."""
-        self.tone(freq, duration_ms)
+        return self.tone(freq, duration_ms)
 
-    def react_to_emotion(self, emotion: str) -> None:
-        """Emite el tono asociado a la emoción detectada."""
-        freq, duration = self._EMOTION_TONES.get(emotion, (440, 100))
-        self.tone(freq, duration)
-
-    def react_to_obstacle(self, distance_cm: float, threshold_cm: float = 10.0) -> None:
-        """
-        Emite un beep proporcional a la proximidad del obstáculo.
-        Cuanto más cerca, más agudo y corto.
-        No emite nada si la distancia supera el umbral.
-        """
-        if distance_cm < 0 or distance_cm >= threshold_cm:
-            return
-        # Mapear distancia (0..threshold) → frecuencia (2000..500 Hz)
-        ratio = max(0.0, min(1.0, distance_cm / threshold_cm))
-        freq  = int(500 + (1 - ratio) * 1500)   # cerca=2000 Hz, lejos=500 Hz
-        dur   = int(50  + ratio        * 150)    # cerca=50 ms, lejos=200 ms
-        self.tone(freq, dur)
-
-    def startup_chime(self) -> None:
+    def startup_chime(self) -> list[Future]:
         """Melodía de arranque (tres tonos ascendentes)."""
         import time
+        futures = []
         for freq in (440, 660, 880):
-            self.tone(freq, 120)
+            futures.append(self.tone(freq, 120))
             time.sleep(0.14)
+        return futures
+    
+    def _clamp(self, v: int, lo: int, hi: int) -> int:
+        return max(lo, min(hi, int(v)))
+
 
     # ── Interno ──────────────────────────────────────────────────────────────
 
-    def _send(self, command: str) -> None:
-        try:
-            # Nuevo protocolo: {BASE_ID}:{SPECIFIC_ID}:{COMMAND}
-            line = f"BUZZ:{self._id}:{command}"
-            if self._verbose:
-                print(f"[BUZZ] → {line}")
-            self._port.send_line(line)
-        except Exception as e:
-            print(f"[BUZZ] ERROR: {e}")
+    def _send(self, command: str) -> Future:
+        # Nuevo protocolo: {BASE_ID}:{SPECIFIC_ID}:{COMMAND}
+        line = f"BUZZ:{self._id}:{command}"
+        if self._verbose:
+            print(f"[BUZZ] → {line}")
+        return self._port.send_line(line)
 
     # ── Unit Test ────────────────────────────────────────────────────────────
 
     def test_interface(self) -> bool:
         """
         Prueba la interfaz enviando comandos básicos.
-        Retorna True si no hubo excepciones.
+        Retorna True si no hubo excepciones (las promesas pueden no estar resueltas).
         """
         print(f"--- Testing BuzzerController ({self._id}) ---")
         try:
-            self.off()
-            self.beep()
-            self.tone(440, 100)
-            self.react_to_emotion("happiness")
-            print("[BUZZ] Test interface OK")
+            self.off().result(timeout=1.0)
+            self.beep().result(timeout=1.0)
+            self.tone(440, 100).result(timeout=1.0)
+            print("[BUZZ] Test interface OK (ACKs received)")
             return True
         except Exception as e:
-            print(f"[BUZZ] Test interface FAILED: {e}")
+            print(f"[BUZZ] Test interface FAILED or TIMEOUT: {e}")
             return False
