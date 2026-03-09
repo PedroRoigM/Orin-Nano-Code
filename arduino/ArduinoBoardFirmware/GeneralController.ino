@@ -1,7 +1,7 @@
 #include "GeneralController.h"
 
-GeneralController::GeneralController(const String &id)
-    : IObserver(id)
+GeneralController::GeneralController(const String &id, const String &type)
+    : IObserver(id), observerType(type)
 {
 }
 

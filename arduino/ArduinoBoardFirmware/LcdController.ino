@@ -1,7 +1,7 @@
 #include "LcdController.h"
 
 LcdController::LcdController(const String &id, uint8_t address, uint8_t cols, uint8_t rows)
-    : GeneralController(id), _lcd(address, cols, rows)
+    : GeneralController(id, LCD_BASE_ID), _lcd(address, cols, rows)
 {
 }
 

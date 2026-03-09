@@ -1,7 +1,7 @@
 #include "BuzzerController.h"
 
 BuzzerController::BuzzerController(const String &id, int pin)
-    : GeneralController(id), _pin(pin)
+    : GeneralController(id, BUZZER_BASE_ID), _pin(pin)
 {
     pinMode(_pin, OUTPUT);
 }

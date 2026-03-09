@@ -1,7 +1,7 @@
 #include "LedController.h"
 
 LedController::LedController(const String &id, int pin, int numPixels)
-    : GeneralController(id), _pin(pin), _numPixels(numPixels),
+    : GeneralController(id, LED_BASE_ID), _pin(pin), _numPixels(numPixels),
       _strip(numPixels, pin, NEO_GRB + NEO_KHZ800),
       _r(255), _g(255), _b(255), _brightness(50)
 {

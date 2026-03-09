@@ -32,6 +32,9 @@ public:
     /** @brief Returns this observer's identifier. */
     String getObserverId() const;
 
+    /** @brief Returns this observer's type (e.g., "LED", "MOT"). */
+    virtual String getObserverType() const = 0;
+
 protected:
     String observerId;
 };

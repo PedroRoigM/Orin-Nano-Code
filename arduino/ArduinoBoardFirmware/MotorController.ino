@@ -1,7 +1,7 @@
 #include "MotorController.h"
 
 MotorController::MotorController(const String &id, int pinIn1, int pinIn2, int pinEn)
-    : GeneralController(id), _pinIn1(pinIn1), _pinIn2(pinIn2), _pinEn(pinEn)
+    : GeneralController(id, MOTOR_BASE_ID), _pinIn1(pinIn1), _pinIn2(pinIn2), _pinEn(pinEn)
 {
     pinMode(_pinIn1, OUTPUT);
     pinMode(_pinIn2, OUTPUT);

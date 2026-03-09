@@ -1,7 +1,7 @@
 #include "UltrasoundController.h"
 
 UltrasoundController::UltrasoundController(const String &id, int pinTrig, int pinEcho)
-    : GeneralController(id), _pinTrig(pinTrig), _pinEcho(pinEcho)
+    : GeneralController(id, ULTRASOUND_BASE_ID), _pinTrig(pinTrig), _pinEcho(pinEcho)
 {
     pinMode(_pinTrig, OUTPUT);
     pinMode(_pinEcho, INPUT);

@@ -43,21 +43,21 @@ void setup()
     Serial.begin(115200);
     Wire.begin();
 
-    coordinator.Attach(&led1, LED_BASE_ID);
-    coordinator.Attach(&led2, LED_BASE_ID);
+    coordinator.Attach(&led1);
+    coordinator.Attach(&led2);
 
-    // coordinator.Attach(&lcdExample, "LCD");
+    // coordinator.Attach(&lcdExample);
 
-    coordinator.Attach(&buzzer1, BUZZER_BASE_ID);
-    coordinator.Attach(&buzzer2, BUZZER_BASE_ID);
+    coordinator.Attach(&buzzer1);
+    coordinator.Attach(&buzzer2);
 
-    // coordinator.Attach(&motorExample, "MOT");
+    // coordinator.Attach(&motorExample);
 
-    coordinator.Attach(&us1, ULTRASOUND_BASE_ID);
-    coordinator.Attach(&us2, ULTRASOUND_BASE_ID);
+    coordinator.Attach(&us1);
+    coordinator.Attach(&us2);
 
-    coordinator.Attach(&eyeLeft, EYE_BASE_ID);
-    coordinator.Attach(&eyeRight, EYE_BASE_ID);
+    coordinator.Attach(&eyeLeft);
+    coordinator.Attach(&eyeRight);
 
     coordinator.printAllObservers();
 

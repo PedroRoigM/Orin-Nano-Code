@@ -10,18 +10,20 @@ Coordinator::Coordinator()
     _eyesObservers.setStorage(_eyesStorage, MAX_EYES_OBSERVERS, 0);
 }
 
-void Coordinator::Attach(IObserver *observer, const String &type)
+void Coordinator::Attach(IObserver *observer)
 {
-    Vector<IObserver *> *list = listForType(type);
+    if (observer == nullptr) return;
+    Vector<IObserver *> *list = listForType(observer->getObserverType());
     if (list != nullptr && !list->full())
     {
         list->push_back(observer);
     }
 }
 
-void Coordinator::Detach(IObserver *observer, const String &type)
+void Coordinator::Detach(IObserver *observer)
 {
-    Vector<IObserver *> *list = listForType(type);
+    if (observer == nullptr) return;
+    Vector<IObserver *> *list = listForType(observer->getObserverType());
     if (list == nullptr)
         return;
 
@@ -34,9 +36,6 @@ void Coordinator::Detach(IObserver *observer, const String &type)
         }
     }
 }
-
-void Coordinator::Attach(IObserver *observer) { (void)observer; }
-void Coordinator::Detach(IObserver *observer) { (void)observer; }
 
 void Coordinator::Notify()
 {

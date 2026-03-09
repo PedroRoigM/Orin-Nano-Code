@@ -16,10 +16,6 @@ class Coordinator : public ISubject
 public:
     Coordinator();
 
-    // Typed Attach / Detach (preferred over the generic ISubject overrides)
-    void Attach(IObserver *observer, const String &type);
-    void Detach(IObserver *observer, const String &type);
-
     // ISubject interface (generic broadcast versions)
     void Attach(IObserver *observer) override;
     void Detach(IObserver *observer) override;

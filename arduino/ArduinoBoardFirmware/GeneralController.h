@@ -12,18 +12,21 @@
 class GeneralController : public IObserver
 {
 public:
-    explicit GeneralController(const String &id);
+    explicit GeneralController(const String &id, const String &type);
 
     // Send a message over Serial (outbound to PC): "<id>:<message>"
     void sendToSerial(const String &message);
 
-    // Subclasses must implement Update()
+    // IObserver implementation
     virtual void Update(const String &message) override = 0;
+    String getObserverType() const override { return observerType; }
     
     // Every controller should implement a sanity test
     virtual void sanityTest() = 0;
 
 protected:
+    String observerType;
+
     // Subclasses override parseMessage() for payload-specific logic
     virtual void parseMessage(const String &message);
 };

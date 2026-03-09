@@ -5,7 +5,7 @@ static const uint8_t HIGHL_SPAN_FAST[] = {5, 5, 4, 4, 3, 2};
 static const uint8_t HIGHL2_SPAN_FAST[] = {3, 3, 2, 1};
 
 EyeController::EyeController(const String &id, int pinCs, int pinDc, int pinRst, int pinMosi, int pinSclk, bool mirrored)
-    : GeneralController(id),
+    : GeneralController(id, EYE_BASE_ID),
       _pinCs(pinCs), _pinDc(pinDc), _pinRst(pinRst),
       _mirrored(mirrored),
       _s_r(60), _s_g(150), _s_b(240),
