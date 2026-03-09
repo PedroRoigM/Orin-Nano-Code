@@ -109,7 +109,7 @@ def main():
         time.sleep(1.0)
         verify_future(arduino.eyes.set_shape("circle"))
         time.sleep(0.5)
-        verify_future(arduino.eyes.update(30, -20, 0, 0, 255)) # Blue gaze
+        verify_future(arduino.eyes.update(0, 0, 255)) # Blue gaze
         time.sleep(1.0)
         verify_future(arduino.eyes.set_idle())
 
