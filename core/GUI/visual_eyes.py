@@ -6,57 +6,122 @@ import random
 import math
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Definición de Estados de los Ojos Robóticos
+# Generador Procedimental de Polígonos de Ojos
 # ─────────────────────────────────────────────────────────────────────────────
-# Cada estado se define por:
-# r_x: radio horizontal
-# r_y: radio vertical
-# start: ángulo inicial de rotación (0 = abajo, 180 = arriba)
-# end: ángulo final de rotación (360 = círculo completo)
-# y_off: desplazamiento vertical respecto al centro
 
-ROBOTIC_EYE_STATES = {
-    "neutral":   {"r_x": 45, "r_y": 65, "start": 0,   "end": 360, "y_off": 0},
-    "happiness": {"r_x": 45, "r_y": 50, "start": 180, "end": 360, "y_off": 15},
-    "sadness":   {"r_x": 45, "r_y": 50, "start": 0,   "end": 180, "y_off": -15},
-    "surprise":  {"r_x": 50, "r_y": 75, "start": 0,   "end": 360, "y_off": 0},
-    "anger":     {"r_x": 45, "r_y": 40, "start": 0,   "end": 180, "y_off": -10}, 
-    "disgust":   {"r_x": 45, "r_y": 35, "start": 0,   "end": 360, "y_off": 0}, 
-    "fear":      {"r_x": 45, "r_y": 65, "start": 0,   "end": 360, "y_off": -5},
-    "contempt":  {"r_x": 45, "r_y": 35, "start": 0,   "end": 360, "y_off": 0},
-    "no_face":   {"r_x": 45, "r_y": 60, "start": 0,   "end": 360, "y_off": 0},
-}
+def generate_capsule(w: float, h: float, n_pts: int = 16) -> np.ndarray:
+    """Genera el contorno de un rectángulo con bordes circulares (cápsula)."""
+    r = w / 2.0
+    straight_h = max(0.0, h - w)
+    cy = straight_h / 2.0
+    
+    t1 = np.linspace(0, np.pi, n_pts, endpoint=False)
+    arc_top = np.column_stack([r * np.cos(t1), -cy - r * np.sin(t1)])
+    
+    t2 = np.linspace(0, 1, n_pts, endpoint=False)
+    left_str = np.column_stack([-r * np.ones_like(t2), -cy + t2 * (2 * cy)])
+    
+    t3 = np.linspace(np.pi, 2 * np.pi, n_pts, endpoint=False)
+    arc_bot = np.column_stack([r * np.cos(t3), cy - r * np.sin(t3)])
+    
+    t4 = np.linspace(0, 1, n_pts, endpoint=False)
+    right_str = np.column_stack([r * np.ones_like(t4), cy - t4 * (2 * cy)])
+    
+    return np.vstack([arc_top, left_str, arc_bot, right_str])
+
+def generate_arc(r_out: float, r_in: float, cy_offset: float, n_pts: int = 16) -> np.ndarray:
+    """Genera el contorno de un arco grueso, por ejemplo ^."""
+    r_center = (r_out + r_in) / 2.0
+    thick = r_out - r_in
+    r_cap = thick / 2.0
+    
+    t1 = np.linspace(0, np.pi, n_pts, endpoint=False)
+    arc_out = np.column_stack([r_out * np.cos(t1), cy_offset - r_out * np.sin(t1)])
+    
+    t2 = np.linspace(np.pi, 2 * np.pi, n_pts, endpoint=False)
+    left_cap = np.column_stack([-r_center + r_cap * np.cos(t2), cy_offset - r_cap * np.sin(t2)])
+    
+    t3 = np.linspace(np.pi, 0, n_pts, endpoint=False)
+    arc_in = np.column_stack([r_in * np.cos(t3), cy_offset - r_in * np.sin(t3)])
+    
+    t4 = np.linspace(np.pi, 2 * np.pi, n_pts, endpoint=False)
+    right_cap = np.column_stack([r_center + r_cap * np.cos(t4), cy_offset - r_cap * np.sin(t4)])
+    
+    return np.vstack([arc_out, left_cap, arc_in, right_cap])
+
+def get_target_poly(emotion: str) -> np.ndarray:
+    """Mapea una emoción a los puntos del polígono correspondiente."""
+    n_pts = 16
+    
+    # Valores por defecto para Neutral (Cápsula vertical, bloque blanco sólido)
+    shape_type = "capsule"
+    w = 70.0
+    h = 110.0
+    r_out = 40.0
+    r_in = 10.0
+    arc_dir = 1
+    cy_offset = 0.0
+    
+    if emotion in ("neutral", "no_face"):
+        pass
+    elif emotion == "happiness":
+        shape_type = "arc"     # ^
+        arc_dir = 1
+        cy_offset = 12.0
+    elif emotion == "sadness":
+        shape_type = "arc"     # U
+        arc_dir = -1
+        cy_offset = -12.0
+    elif emotion == "anger":
+        shape_type = "arc"     # U modificada
+        arc_dir = -1
+        cy_offset = -10.0
+        r_out = 42.0
+        r_in = 20.0
+    elif emotion == "surprise":
+        shape_type = "capsule"
+        w = 76.0
+        h = 126.0
+    elif emotion in ("disgust", "contempt"):
+        shape_type = "capsule"
+        w = 66.0
+        h = 80.0
+        cy_offset = 5.0
+    elif emotion == "fear":
+        shape_type = "capsule"
+        w = 64.0
+        h = 100.0
+        cy_offset = -10.0
+        
+    if shape_type == "capsule":
+        pts = generate_capsule(w, h, n_pts)
+        pts[:, 1] += cy_offset
+    else:
+        pts = generate_arc(r_out, r_in, 0, n_pts)
+        if arc_dir == -1:
+            pts[:, 1] = -pts[:, 1]  # Invertir para formar 'U'
+        pts[:, 1] += cy_offset
+        
+    return pts
 
 class RoboticEyeRenderer:
     """
-    Nuevo generador de ojos robóticos. Usa formas geométricas simples:
-    Óvalos para estado neutral, arcos superiores (^^) para felicidad,
-    arcos inferiores (UU) para tristeza, y líneas horizontales para parpadeo.
+    Generador de ojos robóticos con interpolación de polígonos.
+    Al mutar las coordenadas de los vértices entre formas distintas,
+    la transición simula fluidez anatómica (como achinarse o agrandarse),
+    cumpliendo el patrón de "bloque continuo" en lugar de delgadas líneas de contorno.
     """
     
     SIZE = 240
-    THICKNESS = 32
 
     def __init__(self):
         self._lock = threading.Lock()
         
-        # Parámetros actuales (con suavizado)
-        self.r_x = 45.0
-        self.r_y = 65.0
-        self.start = 0.0
-        self.end = 360.0
-        self.y_off = 0.0
+        self.tgt_emotion = "neutral"
+        self.curr_pts = get_target_poly("neutral")
         
         self.gaze_x = 0.0
         self.gaze_y = 0.0
-        
-        # Parámetros objetivo (target)
-        self.tgt_r_x = 45.0
-        self.tgt_r_y = 65.0
-        self.tgt_start = 0.0
-        self.tgt_end = 360.0
-        self.tgt_y_off = 0.0
-        
         self.tgt_gaze_x = 0.0
         self.tgt_gaze_y = 0.0
         
@@ -72,16 +137,10 @@ class RoboticEyeRenderer:
 
     def update(self, gaze_x: float, gaze_y: float, emotion: str) -> None:
         """Establece los objetivos de mirada y emoción."""
-        state = ROBOTIC_EYE_STATES.get(emotion, ROBOTIC_EYE_STATES["neutral"])
         with self._lock:
+            self.tgt_emotion = emotion
             self.tgt_gaze_x = float(np.clip(gaze_x, -1.0, 1.0))
             self.tgt_gaze_y = float(np.clip(gaze_y, -1.0, 1.0))
-            
-            self.tgt_r_x = float(state["r_x"])
-            self.tgt_r_y = float(state["r_y"])
-            self.tgt_start = float(state["start"])
-            self.tgt_end = float(state["end"])
-            self.tgt_y_off = float(state["y_off"])
 
     def set_idle(self) -> None:
         self.update(0.0, 0.0, "no_face")
@@ -91,17 +150,17 @@ class RoboticEyeRenderer:
         now = time.time()
         
         with self._lock:
-            # LERP para suavidad
+            # LERP para suavidad en la mirada y forma
             L = 0.18
             self.gaze_x += (self.tgt_gaze_x - self.gaze_x) * L
             self.gaze_y += (self.tgt_gaze_y - self.gaze_y) * L
             
-            self.r_x += (self.tgt_r_x - self.r_x) * L
-            self.r_y += (self.tgt_r_y - self.r_y) * L
-            
-            self.start += (self.tgt_start - self.start) * L
-            self.end += (self.tgt_end - self.end) * L
-            self.y_off += (self.tgt_y_off - self.y_off) * L
+            tgt_pts = get_target_poly(self.tgt_emotion)
+            # Morph fluido inter-puntos del polígono
+            if self.curr_pts.shape == tgt_pts.shape:
+                self.curr_pts += (tgt_pts - self.curr_pts) * L
+            else:
+                self.curr_pts = tgt_pts.copy()
             
             # Control de parpadeo
             if self.blink_start is None and now >= self.next_blink:
@@ -116,54 +175,37 @@ class RoboticEyeRenderer:
                     self.blink_start = None
                     self.next_blink = now + self._rand_blink()
                     
-            r_x = int(self.r_x)
-            # El parpadeo aplasta r_y a 0
-            r_y = max(1, int(self.r_y * self.blink_factor))
-            start_ang = int(self.start)
-            end_ang = int(self.end)
-            y_off = int(self.y_off)
+            render_pts = self.curr_pts.copy()
             
-            # Gaze move max limits (20 px)
+            # Escala vertical comprimida simulando el cierre del párpado
+            if self.blink_factor < 1.0:
+                render_pts[:, 1] *= max(0.05, self.blink_factor)
+                
             gx = int(self.gaze_x * 20)
             gy = int(self.gaze_y * 20)
+            
+            render_pts[:, 0] += gx
+            render_pts[:, 1] += gy
 
-        left_eye = self._render_one(r_x, r_y, start_ang, end_ang, gx, gy, y_off)
-        right_eye = self._render_one(r_x, r_y, start_ang, end_ang, gx, gy, y_off)
+        left_eye = self._render_one(render_pts)
+        right_eye = self._render_one(render_pts)
         return left_eye, right_eye
 
-    def _render_one(self, r_x, r_y, start_ang, end_ang, gx, gy, y_off) -> np.ndarray:
+    def _render_one(self, pts: np.ndarray) -> np.ndarray:
         S = self.SIZE
         img = np.zeros((S, S, 3), dtype=np.uint8)
         
         # Fondo oscuro para pantalla OLED
         img[:] = (12, 10, 10) 
         
-        # Centro base de la mirada y offset de estado
-        cx = S // 2 + gx
-        cy = S // 2 + gy + y_off
+        shifted_pts = pts.copy()
+        shifted_pts[:, 0] += S // 2
+        shifted_pts[:, 1] += S // 2
         
-        color = (255, 255, 255) # Ojo blanco robótico
+        # Formato bloque sólido blanco (sin generar pupilas raras)
+        color = (255, 255, 255)
+        cv2.fillPoly(img, [shifted_pts.astype(np.int32)], color, lineType=cv2.LINE_AA)
         
-        if r_y <= 5: 
-            # Es un parpadeo (línea plana con bordes redondeados)
-            length = r_x + self.THICKNESS//2
-            cv2.line(img, (cx - length, cy), (cx + length, cy), color, self.THICKNESS)
-        else:
-            # Forma de óvalo o arco
-            cv2.ellipse(img, (cx, cy), (r_x, r_y), 0, start_ang, end_ang, color, self.THICKNESS, cv2.LINE_AA)
-            
-            # Si es un arco, añadir tapas redondeadas a los extremos para que quede perfecto
-            if start_ang > 0 or end_ang < 360:
-                # Calculamos el punto inicial
-                p1_x = int(cx + r_x * math.cos(math.radians(start_ang)))
-                p1_y = int(cy + r_y * math.sin(math.radians(start_ang)))
-                cv2.circle(img, (p1_x, p1_y), self.THICKNESS//2, color, -1, cv2.LINE_AA)
-                
-                # Calculamos el punto final
-                p2_x = int(cx + r_x * math.cos(math.radians(end_ang)))
-                p2_y = int(cy + r_y * math.sin(math.radians(end_ang)))
-                cv2.circle(img, (p2_x, p2_y), self.THICKNESS//2, color, -1, cv2.LINE_AA)
-
         return img
 
 
