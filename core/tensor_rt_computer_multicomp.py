@@ -30,6 +30,7 @@ import argparse
 import threading
 import math
 import time as _time
+from collections import Counter
 import cv2
 import numpy as np
 import onnxruntime as ort
@@ -69,7 +70,7 @@ ULTRASONIC_THRESHOLD = 10.0
 # Puerto dedicado para los servos de cuello (Demo_neck o Arduino separado).
 # None = usar el mismo puerto del Arduino principal (producción, un solo Arduino).
 # Poner la ruta del puerto cuando el Arduino de cuello es un dispositivo separado.
-NECK_PORT = '/dev/cu.usbmodem2101'   # ej. '/dev/cu.usbmodem2101' o 'COM5'
+NECK_PORT = 'COM13'   # ej. '/dev/cu.usbmodem2101' o 'COM5'
 NECK_BAUD = 9600
 
 EYE_DISPLAY_SIZE = 240   # tamaño del cuadrado donde se renderiza cada ojo
@@ -351,8 +352,8 @@ if NECK_PORT is not None:
         _neck_port = _direct
         print(f"[CameraServo] Usando puerto dedicado {NECK_PORT}")
     except Exception as _e:
-        print(f"[CameraServo] No se pudo abrir {NECK_PORT} ({_e}) — usando mock")
-        _neck_port = arduino.neck_port if isinstance(arduino, MockArduino) else arduino._port
+        print(f"[CameraServo] No se pudo abrir {NECK_PORT} ({_e}) — usando puerto del Arduino principal")
+        _neck_port = arduino._port
 else:
     # Un solo Arduino — compartir el puerto del ArduinoController
     _neck_port = arduino._port
@@ -451,7 +452,7 @@ try:
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             boxes, det_probs = mtcnn.detect(rgb)
 
-        face_count = 0
+        faces_info = []
 
         if boxes is not None:
             for i, box in enumerate(boxes):
@@ -464,11 +465,21 @@ try:
                 if x2 <= x1 or y2 <= y1:
                     continue
 
-                face_count += 1
+                face_cx = (x1 + x2) // 2
+                face_cy = (y1 + y2) // 2
                 face_roi = frame[y1:y2, x1:x2]
                 emotion, emo_conf = classify_emotion(face_roi)
 
-                # Overlay visual en el frame
+                faces_info.append(
+                    {
+                        "emotion":    emotion,
+                        "confidence": float(emo_conf),
+                        "cx":         face_cx,
+                        "cy":         face_cy,
+                    }
+                )
+
+                # Overlay visual en el frame (una caja por cara)
                 colors    = emotionMapper.get_color_dict(emotion, confidence=emo_conf)
                 box_color = colors["dominant_rgb"]
                 cv2.rectangle(frame, (x1, y1), (x2, y2), box_color, 2)
@@ -476,34 +487,55 @@ try:
                             (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
                             0.55, box_color, 2)
 
-                # Primera cara: comportamiento
-                if face_count == 1:
-                    current_emotion = emotion
-                    current_conf    = emo_conf
-                    face_cx = (x1 + x2) // 2
-                    face_cy = (y1 + y2) // 2
+        face_count = len(faces_info)
 
-                    changed = behavior.apply(
-                        emotion, emo_conf,
-                        face_cx=face_cx,
-                        face_cy=face_cy,
-                        frame_w=FRAME_W,
-                        frame_h=FRAME_H,
-                    )
+        if face_count > 0:
+            # Agregación de grupo: emoción dominante ponderada por confianza
+            emo_scores = Counter()
+            for f in faces_info:
+                emo_scores[f["emotion"]] += f["confidence"]
 
-                    if changed:
-                        r, g, b = behavior.get_led_strip_color(emotion)
-                        set_led_strip(r, g, b)
-                        tag = BEHAVIOR.get(emotion, {}).get("log_tag", emotion)
-                        print(f"[Behavior] {tag:10s} | conf={emo_conf:.0%} "
-                              f"| strip=RGB({r},{g},{b})")
+            group_emotion, group_score = emo_scores.most_common(1)[0]
+            total_score = sum(emo_scores.values()) or 1.0
+            group_conf  = float(group_score / total_score)
 
-                    # Actualizar renderizador visual (SimulatedEyes, pantalla local)
-                    gaze_x_v = (face_cx - FRAME_W / 2) / (FRAME_W / 2)
-                    gaze_y_v = (face_cy - FRAME_H / 2) / (FRAME_H / 2)
-                    visual_eyes.update(gaze_x_v, gaze_y_v, emotion)
-                    if cam_servo:
-                        cam_servo.track(face_cx, face_cy, FRAME_W, FRAME_H)
+            # Cara principal: la de mayor confianza (usada para mirada y cuello)
+            primary = max(faces_info, key=lambda f: f["confidence"])
+
+            current_emotion = group_emotion
+            current_conf    = group_conf
+
+            changed = behavior.apply(
+                group_emotion,
+                group_conf,
+                face_cx=primary["cx"],
+                face_cy=primary["cy"],
+                frame_w=FRAME_W,
+                frame_h=FRAME_H,
+            )
+
+            if changed:
+                r, g, b = behavior.get_led_strip_color(group_emotion)
+                set_led_strip(r, g, b)
+                b_cfg = BEHAVIOR.get(group_emotion, BEHAVIOR.get("neutral", {}))
+                tag   = b_cfg.get("log_tag", group_emotion)
+                led   = b_cfg.get("led", "OFF")
+                buz   = b_cfg.get("buzzer")
+                lcd1  = b_cfg.get("lcd_line1", "")
+                lcd2  = b_cfg.get("lcd_line2", "")
+                print(
+                    f"[Behavior→Arduino] faces={face_count} "
+                    f"group={tag:10s} conf={group_conf:.0%} "
+                    f"LED={led} strip=RGB({r},{g},{b}) "
+                    f"buzzer={buz} lcd=({lcd1!r}, {lcd2!r})"
+                )
+
+            # Actualizar renderizador visual (SimulatedEyes, pantalla local)
+            gaze_x_v = (primary["cx"] - FRAME_W / 2) / (FRAME_W / 2)
+            gaze_y_v = (primary["cy"] - FRAME_H / 2) / (FRAME_H / 2)
+            visual_eyes.update(gaze_x_v, gaze_y_v, group_emotion)
+            if cam_servo:
+                cam_servo.track(primary["cx"], primary["cy"], FRAME_W, FRAME_H)
 
         if frame_count % 30 == 0:
             n_raw = len(boxes) if boxes is not None else 0
