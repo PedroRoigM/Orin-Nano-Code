@@ -111,6 +111,7 @@ cam_servo.center()
 # Chime y estado visual de arranque
 arduino.buzzer.startup_chime()
 arduino.leds.on()
+arduino.eyes.on()   # wake up GC9A01 displays (sleep-out + display-on)
 
 # ---------------------------------------------------------------------------
 # Tira de LEDs NeoPixel/WS2812

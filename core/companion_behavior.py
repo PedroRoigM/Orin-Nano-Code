@@ -367,8 +367,10 @@ class BehaviorEngine:
         self._last_eyes_update = current_time
 
         if emotion == "no_face":
-            if hasattr(self._eyes, "set_idle"):
-                self._eyes.set_idle()
+            # Usar move(0,0) en lugar de set_idle() — set_idle reinicia el throttle
+            # y causaría 20 envíos/s por ojo a 20 Hz, saturando el bus serial.
+            if hasattr(self._eyes, "move"):
+                self._eyes.move(0, 0)
         else:
             if hasattr(self._eyes, "update"):
                 beh = BEHAVIOR.get(emotion, BEHAVIOR["neutral"])

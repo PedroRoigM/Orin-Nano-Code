@@ -285,6 +285,6 @@ class CameraServoController:
         if self._verbose:
             print(f"[CameraServo] pan={pan}°  tilt={tilt}°")
         try:
-            self._port.send_line(f"NECK:SRV_1:{pan},{tilt}")
+            self._port.send_line(f"NECK:NECK_1:MOVE:{pan},{tilt}")
         except Exception as e:
             print(f"[CameraServo] ERROR: {e}")
