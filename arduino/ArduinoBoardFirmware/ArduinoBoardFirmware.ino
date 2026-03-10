@@ -81,7 +81,7 @@ void setup()
 // ---------------------------------------------------------------------------
 void loop()
 {
-
+  
     coordinator.readAndRoute();
 
     eyeLeft.redraw();
