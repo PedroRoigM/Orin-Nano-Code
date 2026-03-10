@@ -101,8 +101,8 @@ class ArduinoController:
                 # NO cerrar: cerrar volvería a bajar DTR y provocaría otro reset (bucle infinito).
                 # Solución: abrir UNA vez, esperar el boot y limpiar buffers.
                 self._ser = serial.Serial(port_name, baudrate, timeout=1)
-                print(f"[Arduino] Puerto abierto — esperando boot del Arduino (3 s)…")
-                time.sleep(3.0)
+                print(f"[Arduino] Puerto abierto — esperando boot + sanity test del Arduino (10 s)…")
+                time.sleep(10.0)
                 self._ser.reset_input_buffer()
                 self._ser.reset_output_buffer()
                 print(f"[Arduino] Listo.")

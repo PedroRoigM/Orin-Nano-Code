@@ -69,9 +69,9 @@ STABLE_FRAMES = 2       # frames consecutivos con cara antes de mover servos.
                         # Absorbe detecciones espurias de 1 frame de MTCNN.
 
 # ── Barrido en espera ─────────────────────────────────────────────────────────
-LERP_IDLE    = 0.05     # lerp physical→target en idle (muy lento)
-SCAN_AMP_PAN = 5.0      # amplitud del barrido pan (°) — sutil
-SCAN_FREQ    = 0.07     # Hz — un ciclo cada ~14 s (imperceptiblemente lento)
+LERP_IDLE    = 0.12     # lerp physical→target en idle
+SCAN_AMP_PAN = 15.0     # amplitud del barrido pan (°) — visible
+SCAN_FREQ    = 0.10     # Hz — un ciclo cada ~10 s (movimiento de búsqueda visible)
 
 
 class CameraServoController:

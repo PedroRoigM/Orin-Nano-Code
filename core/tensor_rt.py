@@ -3,8 +3,8 @@ tensor_rt.py
 ============
 Pipeline principal Jetson Orin Nano — robot de acompañamiento médico.
 
-Detección de caras:   SCRFD (InsightFace / FaceDetector) en GPU CUDA
-Clasificación:        ONNX Runtime (emotion.onnx) con TensorrtExecutionProvider
+Detección de caras:   MTCNN (facenet-pytorch) en GPU CUDA si disponible
+Clasificación:        ONNX Runtime (emotion.onnx) con CUDAExecutionProvider
 Agregación:           Emoción de grupo ponderada por confianza (Counter multi-cara)
 Cámara:               CSI via GStreamer (nvarguscamerasrc)
 Hardware:             ArduinoController → LEDs, buzzer, motor, ojos, servo cuello
@@ -18,10 +18,11 @@ import os
 import cv2
 import numpy as np
 import onnxruntime as ort
+import torch
+from facenet_pytorch import MTCNN
 from collections import Counter
 import time
 
-from face_detector                          import FaceDetector
 from processing.emotion_color_mapper        import EmotionColorMapper
 from controllers.arduino_controller         import ArduinoController
 from controllers.camera_servo_controller    import CameraServoController
@@ -53,10 +54,10 @@ FWD_SPEED   = 40                      # velocidad de avance (1-127)
 
 # ---------------------------------------------------------------------------
 # ONNX Runtime — clasificación de emociones
-# Providers en orden de preferencia: TensorRT → CUDA → CPU
+# Providers en orden de preferencia: CUDA → CPU
 # ---------------------------------------------------------------------------
 _model_path  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "emotion.onnx")
-_providers   = ["TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"]
+_providers   = ["CUDAExecutionProvider", "CPUExecutionProvider"]
 session      = ort.InferenceSession(_model_path, providers=_providers)
 _input_name  = session.get_inputs()[0].name
 _output_name = session.get_outputs()[0].name
@@ -77,10 +78,19 @@ def classify_emotion(face_roi: np.ndarray) -> tuple[str, float]:
 
 
 # ---------------------------------------------------------------------------
-# FaceDetector — SCRFD via InsightFace (ctx_id=0 → GPU CUDA en Jetson)
-# conf_threshold=0.3 permissivo; CONF_THRESHOLD filtra en el loop
+# MTCNN — detección de caras (GPU si disponible, CPU como fallback)
 # ---------------------------------------------------------------------------
-detector     = FaceDetector(det_size=(FRAME_W, FRAME_H), conf_threshold=0.3, ctx_id=0)
+_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"[MTCNN] device: {_device}")
+
+mtcnn = MTCNN(
+    keep_all=True, device=_device,
+    min_face_size=60,
+    thresholds=[0.7, 0.8, 0.9],
+    post_process=False,
+    select_largest=False,
+)
+
 emotionMapper = EmotionColorMapper()
 
 # ---------------------------------------------------------------------------
@@ -145,6 +155,12 @@ if not cap.isOpened():
 
 out = cv2.VideoWriter(OUTPUT_PATH, cv2.VideoWriter_fourcc(*"mp4v"),
                       15, (FRAME_W, FRAME_H))
+
+# Forzar re-envío del DRAW en el primer frame del bucle principal.
+# Necesario porque el startup DRAW puede haberse perdido si el buffer
+# serial estaba lleno durante el sanity test del Arduino.
+arduino.eyes_1._last_draw_key = None
+arduino.eyes_2._last_draw_key = None
 
 # ---------------------------------------------------------------------------
 # Estado
@@ -234,7 +250,7 @@ try:
         # Detección de caras cada N frames
         if frame_count % DETECT_EVERY_N_FRAMES == 0:
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            boxes, det_probs = detector.detect(rgb)
+            boxes, det_probs = mtcnn.detect(rgb)
 
         # ── Procesar todas las caras detectadas ────────────────────────────
         faces_info = []
