@@ -351,11 +351,18 @@ class BehaviorEngine:
     def _update_eyes(self, emotion: str, gaze_x: float, gaze_y: float) -> None:
         """
         Actualiza mirada y color terapéutico en el controlador de ojos.
+        Limitado a máximo 2 actualizaciones por segundo (500ms entre llamadas).
         El propio controlador (EyesController / MockEyes) gestiona el logging
         [SERIAL →] y el filtro de cambio de emoción internamente.
         """
         if self._eyes is None:
             return
+
+        # Rate limiting: máximo 2 veces por segundo (500ms)
+        current_time = time.time()
+        if current_time - self._last_eyes_update < 0.5:
+            return
+        self._last_eyes_update = current_time
 
         if emotion == "no_face":
             if hasattr(self._eyes, "set_idle"):
