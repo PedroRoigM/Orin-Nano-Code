@@ -1,5 +1,6 @@
 #include "EyeController.h"
 #include <math.h>
+#include <SPI.h>
 
 // ─── Constructor ─────────────────────────────────────────────────────────────
 EyeController::EyeController(const String &id,

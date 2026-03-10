@@ -1,3 +1,6 @@
+#ifndef EYE_CONTROLLER_H
+#define EYE_CONTROLLER_H
+
 #include "GeneralController.h"
 
 // ─── Screen geometry ─────────────────────────────────────────────────────────
@@ -87,3 +90,5 @@ private:
     static uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b);
     static int nextInt(const char *&p);
 };
+
+#endif
