@@ -20,20 +20,15 @@
 // ─── Geometría ───────────────────────────────────────────────────────────────
 #define CX          120     // centro pantalla
 #define CY          120
-#define BALL_R       60     // radio del iris (más grande)
-#define BALL_R2    3600L    // 60²
-#define PUPIL_R      28     // radio de la pupila
-#define PUPIL_R2    784L    // 28²
-#define HIGHL_R       5     // radio del punto de luz principal
-#define HIGHL_OX     20     // offset X
-#define HIGHL_OY     20     // offset Y
-#define HIGHL2_R      3     // segundo brillo más pequeño
-#define HIGHL2_OX   -10     // abajo a la izquierda
-#define HIGHL2_OY   -12
-#define MAX_GAZE     45     // Reducido para evitar salirse demasiado con ojos grandes
+#define EYE_W        70     // ancho del ojo (cápsula)
+#define EYE_H       130     // altura total del ojo
+#define EYE_R        35     // radio de las esquinas (EYE_W / 2)
+#define EYE_R2     1225L    // 35²
+#define EYE_Y_FLAT   30     // (EYE_H - 2*EYE_R) / 2
+#define MAX_GAZE     40     // Distancia máxima de movimiento al mirar
 
 // ─── Estado objetivo (actualizado por serial) ────────────────────────────────
-static uint8_t s_r = 60,  s_g = 150, s_b = 240;
+static uint8_t s_r = 255, s_g = 255, s_b = 255;
 static int     s_gx = 0,  s_gy = 0;
 static bool    s_new_cmd = false;   // true cada vez que llega un EYE válido
 static unsigned long s_last_serial_task = 0;
@@ -44,11 +39,7 @@ static uint8_t d_r  = 0,  d_g  = 0,  d_b  = 0;   // distintos de s_* → fuerza 
 
 // ─── Tablas precalculadas de semiancho por fila ───────────────────────────────
 // Calculadas una sola vez en setup(); eliminan la multiplicación 32-bit por píxel.
-static uint8_t circ_span[BALL_R  + 1];   // iris
-static uint8_t pupl_span[PUPIL_R + 1];   // pupila
-// Semiancho del reflejo
-static const uint8_t HIGHL_SPAN[6] = {5, 5, 4, 4, 3, 2};
-static const uint8_t HIGHL2_SPAN[4] = {3, 3, 2, 1};
+static uint8_t eye_span[EYE_Y_FLAT + EYE_R + 1];
 
 // ─── Helper RGB565 ───────────────────────────────────────────────────────────
 static inline uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
@@ -113,16 +104,20 @@ static void fillRect(int x0, int y0, int x1, int y1, uint16_t col) {
     CS_HIGH();
 }
 
-// ─── drawBall — iris + pupila, union bounding box, sin parpadeo ──────────────
-static void drawBall(int new_cx, int new_cy, uint16_t col) {
-    int x0 = min(d_cx, new_cx) - BALL_R - 1;
-    int y0 = min(d_cy, new_cy) - BALL_R - 1;
-    int x1 = max(d_cx, new_cx) + BALL_R + 1;
-    int y1 = max(d_cy, new_cy) + BALL_R + 1;
+// ─── drawEye — cápsula del ojo, union bounding box, sin parpadeo ──────────────
+static void drawEye(int new_cx, int new_cy, uint16_t col) {
+    int max_y_dist = EYE_Y_FLAT + EYE_R + 1;
+    int max_x_dist = EYE_R + 1;
+    int x0 = min(d_cx, new_cx) - max_x_dist;
+    int y0 = min(d_cy, new_cy) - max_y_dist;
+    int x1 = max(d_cx, new_cx) + max_x_dist;
+    int y1 = max(d_cy, new_cy) + max_y_dist;
+    
     if (x0 < 0) x0 = 0; if (y0 < 0) y0 = 0;
     if (x1 > 239) x1 = 239; if (y1 > 239) y1 = 239;
 
     uint8_t hi = col >> 8, lo = col & 0xFF;
+    
     setWindow(x0, y0, x1, y1);
     DC_HIGH(); CS_LOW();
 
@@ -130,74 +125,19 @@ static void drawBall(int new_cx, int new_cy, uint16_t col) {
         int ady = py - new_cy;
         if (ady < 0) ady = -ady;
 
-        if (ady > BALL_R) {
+        if (ady > EYE_Y_FLAT + EYE_R) {
             for (int px = x1 - x0 + 1; px > 0; px--) {
                 SPDR = 0; while (!(SPSR & _BV(SPIF)));
                 SPDR = 0; while (!(SPSR & _BV(SPIF)));
             }
         } else {
-            uint8_t xs = circ_span[ady];
+            uint8_t xs = eye_span[ady];
             int cl = new_cx - xs; if (cl < x0) cl = x0;
             int cr = new_cx + xs; if (cr > x1) cr = x1;
 
-            if (ady <= PUPIL_R) {
-                uint8_t ps = pupl_span[ady];
-                int pl = new_cx - ps; if (pl < x0) pl = x0;
-                int pr = new_cx + ps; if (pr > x1) pr = x1;
-
-                for (int px = x0;    px <  cl; px++) { SPDR = 0;  while (!(SPSR & _BV(SPIF))); SPDR = 0;  while (!(SPSR & _BV(SPIF))); }
-                for (int px = cl;    px <  pl; px++) { SPDR = hi; while (!(SPSR & _BV(SPIF))); SPDR = lo; while (!(SPSR & _BV(SPIF))); }
-                for (int px = pl;    px <= pr; px++) { SPDR = 0;  while (!(SPSR & _BV(SPIF))); SPDR = 0;  while (!(SPSR & _BV(SPIF))); }
-                for (int px = pr+1;  px <= cr; px++) { SPDR = hi; while (!(SPSR & _BV(SPIF))); SPDR = lo; while (!(SPSR & _BV(SPIF))); }
-                for (int px = cr+1;  px <= x1; px++) { SPDR = 0;  while (!(SPSR & _BV(SPIF))); SPDR = 0;  while (!(SPSR & _BV(SPIF))); }
-            } else {
-                for (int px = x0;   px <  cl; px++) { SPDR = 0;  while (!(SPSR & _BV(SPIF))); SPDR = 0;  while (!(SPSR & _BV(SPIF))); }
-                for (int px = cl;   px <= cr; px++) { SPDR = hi; while (!(SPSR & _BV(SPIF))); SPDR = lo; while (!(SPSR & _BV(SPIF))); }
-                for (int px = cr+1; px <= x1; px++) { SPDR = 0;  while (!(SPSR & _BV(SPIF))); SPDR = 0;  while (!(SPSR & _BV(SPIF))); }
-            }
-        }
-    }
-    CS_HIGH();
-}
-
-// ─── drawHighlight — punto de luz blanco en el iris ──────────────────────────
-static void drawHighlight(int cx, int cy, uint16_t irisCol) {
-    uint8_t hi = irisCol >> 8, lo = irisCol & 0xFF;
-    
-    // Highlight 1 (Grande)
-    int hx = cx + HIGHL_OX, hy = cy - HIGHL_OY;
-    int x0 = hx - HIGHL_R, x1 = hx + HIGHL_R;
-    int y0 = hy - HIGHL_R, y1 = hy + HIGHL_R;
-    if (x0 < 0) x0 = 0; if (y0 < 0) y0 = 0;
-    if (x1 > 239) x1 = 239; if (y1 > 239) y1 = 239;
-    setWindow(x0, y0, x1, y1);
-    DC_HIGH(); CS_LOW();
-    for (int py = y0; py <= y1; py++) {
-        int ady = py - hy; if (ady < 0) ady = -ady;
-        uint8_t xs = (ady < 6) ? HIGHL_SPAN[ady] : 0;
-        int hl = hx - xs, hr = hx + xs;
-        for (int px = x0; px <= x1; px++) {
-            if (px >= hl && px <= hr) { SPDR = 0xFF; while (!(SPSR & _BV(SPIF))); SPDR = 0xFF; while (!(SPSR & _BV(SPIF))); }
-            else { SPDR = hi; while (!(SPSR & _BV(SPIF))); SPDR = lo; while (!(SPSR & _BV(SPIF))); }
-        }
-    }
-    CS_HIGH();
-
-    // Highlight 2 (Pequeño / Brillo secundario "cute")
-    hx = cx + HIGHL2_OX; hy = cy - HIGHL2_OY;
-    x0 = hx - HIGHL2_R; x1 = hx + HIGHL2_R;
-    y0 = hy - HIGHL2_R; y1 = hy + HIGHL2_R;
-    if (x0 < 0) x0 = 0; if (y0 < 0) y0 = 0;
-    if (x1 > 239) x1 = 239; if (y1 > 239) y1 = 239;
-    setWindow(x0, y0, x1, y1);
-    DC_HIGH(); CS_LOW();
-    for (int py = y0; py <= y1; py++) {
-        int ady = py - hy; if (ady < 0) ady = -ady;
-        uint8_t xs = (ady < 4) ? HIGHL2_SPAN[ady] : 0;
-        int hl = hx - xs, hr = hx + xs;
-        for (int px = x0; px <= x1; px++) {
-            if (px >= hl && px <= hr) { SPDR = 0xFF; while (!(SPSR & _BV(SPIF))); SPDR = 0xFF; while (!(SPSR & _BV(SPIF))); }
-            else { SPDR = hi; while (!(SPSR & _BV(SPIF))); SPDR = lo; while (!(SPSR & _BV(SPIF))); }
+            for (int px = x0;   px <  cl; px++) { SPDR = 0;  while (!(SPSR & _BV(SPIF))); SPDR = 0;  while (!(SPSR & _BV(SPIF))); }
+            for (int px = cl;   px <= cr; px++) { SPDR = hi; while (!(SPSR & _BV(SPIF))); SPDR = lo; while (!(SPSR & _BV(SPIF))); }
+            for (int px = cr+1; px <= x1; px++) { SPDR = 0;  while (!(SPSR & _BV(SPIF))); SPDR = 0;  while (!(SPSR & _BV(SPIF))); }
         }
     }
     CS_HIGH();
@@ -325,13 +265,14 @@ static void readSerial() {
 void setup() {
     Serial.begin(115200);
 
-    for (uint8_t dy = 0; dy <= BALL_R; dy++) {
-        long dy2 = (long)dy * dy;
-        circ_span[dy] = (dy2 > BALL_R2)  ? 0 : (uint8_t)sqrt((float)(BALL_R2  - dy2));
-    }
-    for (uint8_t dy = 0; dy <= PUPIL_R; dy++) {
-        long dy2 = (long)dy * dy;
-        pupl_span[dy] = (dy2 > PUPIL_R2) ? 0 : (uint8_t)sqrt((float)(PUPIL_R2 - dy2));
+    for (int ady = 0; ady <= EYE_Y_FLAT + EYE_R; ady++) {
+        if (ady <= EYE_Y_FLAT) {
+            eye_span[ady] = EYE_R;
+        } else {
+            long dy = ady - EYE_Y_FLAT;
+            long dy2 = dy * dy;
+            eye_span[ady] = (dy2 > EYE_R2) ? 0 : (uint8_t)sqrt((float)(EYE_R2 - dy2));
+        }
     }
 
     pinMode(PIN_RST, OUTPUT);
@@ -373,8 +314,7 @@ void loop() {
     if (icx != d_cx || icy != d_cy || s_new_cmd) {
         s_new_cmd = false;
         uint16_t col = rgb565(s_r, s_g, s_b);
-        drawBall(icx, icy, col);
-        drawHighlight(icx, icy, col);
+        drawEye(icx, icy, col);
         d_cx = icx; d_cy = icy;
         d_r = s_r; d_g = s_g; d_b = s_b;
     }
