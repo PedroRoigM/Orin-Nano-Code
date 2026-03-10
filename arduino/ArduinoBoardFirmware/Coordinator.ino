@@ -8,6 +8,7 @@ Coordinator::Coordinator() : _rxLen(0)
     _motorObservers.setStorage(_motorStorage, MAX_MOTOR_OBSERVERS, 0);
     _ultrasoundObservers.setStorage(_ultrasoundStorage, MAX_ULTRASOUND_OBSERVERS, 0);
     _eyesObservers.setStorage(_eyesStorage, MAX_EYES_OBSERVERS, 0);
+    _neckObservers.setStorage(_neckStorage, MAX_NECK_OBSERVERS, 0);
 }
 
 void Coordinator::Attach(IObserver *observer)
@@ -218,14 +219,16 @@ Vector<IObserver *> *Coordinator::listForType(const String &type)
         return &_ledObservers;
     if (type == LCD_BASE_ID)
         return &_lcdObservers;
-    if (type == BUZZER_BASE_ID)
+    else if (type == BUZZER_BASE_ID)
         return &_buzzerObservers;
-    if (type == MOTOR_BASE_ID)
+    else if (type == MOTOR_BASE_ID)
         return &_motorObservers;
-    if (type == ULTRASOUND_BASE_ID)
+    else if (type == ULTRASOUND_BASE_ID)
         return &_ultrasoundObservers;
-    if (type == EYE_BASE_ID)
+    else if (type == EYE_BASE_ID)
         return &_eyesObservers;
+    else if (type == NECK_BASE_ID)
+        return &_neckObservers;
 
     return nullptr;
 }

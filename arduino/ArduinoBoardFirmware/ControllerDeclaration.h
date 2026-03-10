@@ -13,5 +13,6 @@
 #include "UltrasoundController.h"
 #include "Coordinator.h"
 #include "EyeController.h"
+#include "NeckController.h"
 
 #endif // CONTROLLER_DECLARATION_H
