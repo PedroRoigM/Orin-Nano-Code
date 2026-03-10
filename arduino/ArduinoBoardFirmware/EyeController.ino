@@ -217,54 +217,62 @@ void EyeController::handleCmdOff()
 // Paints the entire screen in one solid colour. No eye is drawn.
 void EyeController::handleCmdFill(const String &payload)
 {
-    const char *p = payload.c_str();
-    uint8_t r = (uint8_t)constrain(nextInt(p), 0, 255);
-    uint8_t g = (uint8_t)constrain(nextInt(p), 0, 255);
-    uint8_t b = (uint8_t)constrain(nextInt(p), 0, 255);
+    int c1 = payload.indexOf(',');
+    int c2 = payload.indexOf(',', c1 + 1);
 
-    // Switch to fill-only mode — redraw() will not paint the eye capsule
+    if (c1 < 0 || c2 < 0)
+        return;
+
+    uint8_t r = constrain(payload.substring(0, c1).toInt(), 0, 255);
+    uint8_t g = constrain(payload.substring(c1 + 1, c2).toInt(), 0, 255);
+    uint8_t b = constrain(payload.substring(c2 + 1).toInt(), 0, 255);
+
     _showEye = false;
 
     if (_on)
         fillScreen(rgb565(r, g, b));
 
-    // Output: EYE_<n>:EYE:ok
     sendToSerial(String(EYE_PREFIX) + ":ok");
 }
 
 // EYE:EYE_<n>:DRAW:<shape>,<r>,<g>,<b>,<bg_r>,<bg_g>,<bg_b>
 // Switches to eye-drawing mode.  Only "neutral" shape is implemented.
 // Fills the screen with the new background first so no FILL artefacts remain.
+// EYE:EYE_<n>:DRAW:<shape>,<r>,<g>,<b>,<bg_r>,<bg_g>,<bg_b>
 void EyeController::handleCmdDraw(const String &payload)
 {
-    // Consume the shape token (text up to first comma) — reserved for future shapes
-    int comma = payload.indexOf(',');
-    if (comma < 0)
+    int c1 = payload.indexOf(',');
+    int c2 = payload.indexOf(',', c1 + 1);
+    int c3 = payload.indexOf(',', c2 + 1);
+    int c4 = payload.indexOf(',', c3 + 1);
+    int c5 = payload.indexOf(',', c4 + 1);
+    int c6 = payload.indexOf(',', c5 + 1);
+
+    if (c1 < 0 || c2 < 0 || c3 < 0 || c4 < 0 || c5 < 0)
         return;
 
-    const char *p = payload.c_str() + comma + 1;
-    _r = (uint8_t)constrain(nextInt(p), 0, 255);
-    _g = (uint8_t)constrain(nextInt(p), 0, 255);
-    _b = (uint8_t)constrain(nextInt(p), 0, 255);
-    _bgR = (uint8_t)constrain(nextInt(p), 0, 255);
-    _bgG = (uint8_t)constrain(nextInt(p), 0, 255);
-    _bgB = (uint8_t)constrain(nextInt(p), 0, 255);
+    // shape token (currently unused)
+    String shape = payload.substring(0, c1);
 
-    // Fill the whole screen with the new background so any previous FILL or
-    // eye-colour is fully cleared before the capsule is painted on top.
+    _r = constrain(payload.substring(c1 + 1, c2).toInt(), 0, 255);
+    _g = constrain(payload.substring(c2 + 1, c3).toInt(), 0, 255);
+    _b = constrain(payload.substring(c3 + 1, c4).toInt(), 0, 255);
+
+    _bgR = constrain(payload.substring(c4 + 1, c5).toInt(), 0, 255);
+    _bgG = constrain(payload.substring(c5 + 1, c6).toInt(), 0, 255);
+    _bgB = constrain(payload.substring(c6 + 1).toInt(), 0, 255);
+
     if (_on)
         fillScreen(rgb565(_bgR, _bgG, _bgB));
 
-    // Reset draw-state so the very next redraw() repaints the full bounding box
     _dCx = EYE_CX;
     _dCy = EYE_CY;
     _fCx = (float)EYE_CX;
     _fCy = (float)EYE_CY;
 
     _showEye = true;
-    _dirty = true; // force repaint on next redraw()
+    _dirty = true;
 
-    // Output: EYE_<n>:EYE:ok
     sendToSerial(String(EYE_PREFIX) + ":ok");
 }
 
@@ -636,21 +644,4 @@ void EyeController::setWindow(int x0, int y0, int x1, int y1)
 uint16_t EyeController::rgb565(uint8_t r, uint8_t g, uint8_t b)
 {
     return ((uint16_t)(r >> 3) << 11) | ((uint16_t)(g >> 2) << 5) | (uint16_t)(b >> 3);
-}
-
-// Parse a signed integer from a C-string, advancing the pointer past the value
-// and any following comma.
-int EyeController::nextInt(const char *&p)
-{
-    while (*p == ' ')
-        p++;
-    bool neg = (*p == '-');
-    if (neg)
-        p++;
-    int v = 0;
-    while (*p >= '0' && *p <= '9')
-        v = v * 10 + (*p++ - '0');
-    if (*p == ',')
-        p++;
-    return neg ? -v : v;
 }
