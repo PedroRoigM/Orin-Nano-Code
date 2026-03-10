@@ -144,5 +144,19 @@
 #define EYE_SHAPE_SAD "sad"
 
 // ---------------------------------------------------------------------------
+// Neck (Pan/Tilt)
+// ---------------------------------------------------------------------------
+// Income:
+//   NECK:NECK_<n>:MOVE:<pan>,<tilt>
+//
+// Outcome:
+//   NECK_<n>:POS:<pan>,<tilt>
+
+#define NECK_BASE_ID "NECK"
+#define NECK_ID(num) NECK_BASE_ID "_" #num
+#define NECK_CMD_MOVE "MOVE"
+#define NECK_POS_PREFIX "POS"
+
+// ---------------------------------------------------------------------------
 
 #endif // COMMUNICATION_PORTOCOL_DECLARATION_H

@@ -4,12 +4,13 @@
 // ---------------------------------------------------------------------------
 // Observer counts — determines array sizes in Coordinator
 // ---------------------------------------------------------------------------
-#define MAX_LED_OBSERVERS 2
-#define MAX_LCD_OBSERVERS 0
-#define MAX_BUZZER_OBSERVERS 2
-#define MAX_MOTOR_OBSERVERS 4
-#define MAX_ULTRASOUND_OBSERVERS 0
-#define MAX_EYES_OBSERVERS 2
+#define MAX_LED_OBSERVERS        2
+#define MAX_LCD_OBSERVERS        0
+#define MAX_BUZZER_OBSERVERS     2
+#define MAX_MOTOR_OBSERVERS      4
+#define MAX_ULTRASOUND_OBSERVERS 2
+#define MAX_EYES_OBSERVERS       2
+#define MAX_NECK_OBSERVERS       1
 
 // ---------------------------------------------------------------------------
 // LED Pins  (Arduino Mega digital pins 22-23)
@@ -62,11 +63,17 @@
 // ---------------------------------------------------------------------------
 // Eyes  (GC9A01 × 2, hardware SPI on Mega)
 // ---------------------------------------------------------------------------
-#define PIN_EYES_MOSI 51
-#define PIN_EYES_SCK 52
-// #define PIN_EYES_CS_LEFT   49
-#define PIN_EYES_CS_RIGHT 48
-#define PIN_EYES_DC 47
-#define PIN_EYES_RST 46
+#define PIN_EYES_MOSI      51
+#define PIN_EYES_SCK       52
+//#define PIN_EYES_CS_LEFT   49  
+#define PIN_EYES_CS_RIGHT  48
+#define PIN_EYES_DC        47
+#define PIN_EYES_RST       46
+
+// ---------------------------------------------------------------------------
+// Neck Servos (Pan/Tilt)
+// ---------------------------------------------------------------------------
+#define PIN_NECK_PAN       9
+#define PIN_NECK_TILT      10
 
 #endif // HARDWARE_DECLARATION_H
