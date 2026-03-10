@@ -11,9 +11,6 @@ set -euo pipefail
 
 # ── CONFIGURA AQUÍ ────────────────────────────────────────────────────────────
 REPO_URL="https://github.com/PedroRoigM/Orin-Nano-Code.git"
-GIT_USER=""          # tu usuario de GitHub
-GIT_EMAIL=""         # tu email de GitHub
-GIT_TOKEN=""         # Personal Access Token (GitHub → Settings → Developer settings → PAT)
 PROJECT_DIR="/home/jetson/prueba"
 VENV_DIR="$HOME/venv_cuda"
 MAIN_SCRIPT="core/tensor_rt.py"
@@ -34,24 +31,14 @@ fail() { echo -e "${RED}[FAIL]${NC} $*"; }
 echo ""
 echo "=== Repositorio ==="
 
-if [ -z "$GIT_USER" ] || [ -z "$GIT_TOKEN" ]; then
-    warn "GIT_USER o GIT_TOKEN vacíos — se omite git clone/pull (configúralos al inicio del script)"
+if [ ! -d "$PROJECT_DIR/.git" ]; then
+    echo "  Clonando repositorio en $PROJECT_DIR ..."
+    git clone "$REPO_URL" "$PROJECT_DIR"
+    ok "Repositorio clonado en $PROJECT_DIR"
 else
-    REPO_AUTH_URL="https://${GIT_USER}:${GIT_TOKEN}@${REPO_URL#https://}"
-
-    if [ ! -d "$PROJECT_DIR/.git" ]; then
-        echo "  Clonando repositorio en $PROJECT_DIR ..."
-        git clone "$REPO_AUTH_URL" "$PROJECT_DIR"
-        git -C "$PROJECT_DIR" config user.email "$GIT_EMAIL"
-        git -C "$PROJECT_DIR" config user.name  "$GIT_USER"
-        ok "Repositorio clonado en $PROJECT_DIR"
-    else
-        echo "  Actualizando repositorio..."
-        git -C "$PROJECT_DIR" config user.email "$GIT_EMAIL"
-        git -C "$PROJECT_DIR" config user.name  "$GIT_USER"
-        git -C "$PROJECT_DIR" pull "$REPO_AUTH_URL"
-        ok "Repositorio actualizado"
-    fi
+    echo "  Actualizando repositorio..."
+    git -C "$PROJECT_DIR" pull
+    ok "Repositorio actualizado"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -187,10 +174,16 @@ install_if_missing() {
     fi
 }
 
+# numpy<2 es obligatorio: torch de JetPack e insightface fueron compilados con NumPy 1.x
+echo "  Fijando numpy<2 (compatibilidad con torch JetPack e insightface)..."
+pip install --quiet "numpy<2"
+ok "numpy $(python3 -c 'import numpy; print(numpy.__version__)')"
+
 install_if_missing "cv2"            "opencv-python"          "opencv-python (cv2)"
-install_if_missing "numpy"          "numpy"                  "numpy"
 install_if_missing "serial"         "pyserial"               "pyserial"
 install_if_missing "spidev"         "spidev"                 "spidev"
+install_if_missing "onnxruntime"    "onnxruntime-gpu"        "onnxruntime-gpu"
+install_if_missing "insightface"    "insightface"            "insightface"
 # Jetson.GPIO: siempre instalar en el venv para que la versión pip
 # (con soporte Orin Nano) tome prioridad sobre la del sistema (/usr/lib/...)
 echo "  Instalando/actualizando Jetson.GPIO en el venv..."
