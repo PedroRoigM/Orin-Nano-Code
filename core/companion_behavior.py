@@ -360,9 +360,9 @@ class BehaviorEngine:
         if self._eyes is None:
             return
 
-        # Rate limiting: máximo 2 veces por segundo (500ms)
+        # Rate limiting: máximo 20 veces por segundo (50ms) — EyesController ya throttlea internamente
         current_time = time.time()
-        if current_time - self._last_eyes_update < 0.5:
+        if current_time - self._last_eyes_update < 0.05:
             return
         self._last_eyes_update = current_time
 

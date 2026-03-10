@@ -264,6 +264,11 @@ class CameraServoController:
 
         self._send(int(round(self._pan)), int(round(self._tilt)))
 
+    @property
+    def at_pan_limit(self) -> bool:
+        """True cuando el servo pan ha alcanzado su límite mecánico (±3° del extremo)."""
+        return self._pan >= PAN_MAX - 3 or self._pan <= PAN_MIN + 3
+
     def close(self) -> None:
         """Centra los servos antes de cerrar. El puerto lo gestiona el propietario."""
         self.center()

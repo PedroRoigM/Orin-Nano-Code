@@ -116,8 +116,14 @@ arduino.leds.on()
 # Tira de LEDs NeoPixel/WS2812
 # Protocolo: LED:LED_1:COLOR:r,g,b  y  LED:LED_2:COLOR:r,g,b
 # ---------------------------------------------------------------------------
+_last_led_rgb: tuple = (-1, -1, -1)   # dedup — evita inundar el serial
+
 def set_led_strip(r: int, g: int, b: int) -> None:
-    """Establece el color terapéutico de los LEDs según la emoción."""
+    """Establece el color terapéutico de los LEDs según la emoción (deduplicado)."""
+    global _last_led_rgb
+    if (r, g, b) == _last_led_rgb:
+        return
+    _last_led_rgb = (r, g, b)
     arduino.leds.set_color(r, g, b)
 
 # ---------------------------------------------------------------------------
@@ -125,9 +131,9 @@ def set_led_strip(r: int, g: int, b: int) -> None:
 # ---------------------------------------------------------------------------
 GST_PIPELINE = (
     "nvarguscamerasrc sensor_id=0 ! "
-    "video/x-raw(memory:NVMM),width=640,height=480,framerate=30/1,format=NV12 ! "
-    "nvvidconv flip-method=0 ! video/x-raw,format=BGRx ! "
-    "videoconvert ! video/x-raw,format=BGR ! appsink drop=1 max-buffers=1"
+    "video/x-raw(memory:NVMM),width=1280,height=720,framerate=60/1,format=NV12 ! "
+    "nvvidconv flip-method=0 ! video/x-raw,width=640,height=480,format=BGRx ! "
+    "videoconvert ! video/x-raw,format=BGR ! appsink drop=1 max-buffers=1 sync=false"
 )
 
 cap = cv2.VideoCapture(GST_PIPELINE, cv2.CAP_GSTREAMER)
@@ -152,8 +158,13 @@ current_conf    = 0.0
 _prev_had_face  = False   # para detectar transición no-cara → cara
 
 print("Grabando... Pulsa Ctrl+C para detener.")
-cv2.namedWindow("Emotion Detection", cv2.WINDOW_NORMAL)
-cv2.setWindowProperty("Emotion Detection", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+_has_display = False
+try:
+    cv2.namedWindow("Emotion Detection", cv2.WINDOW_NORMAL)
+    cv2.setWindowProperty("Emotion Detection", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    _has_display = True
+except Exception:
+    print("[Display] Sin pantalla — modo headless (solo grabación).")
 
 
 # ---------------------------------------------------------------------------
@@ -161,15 +172,28 @@ cv2.setWindowProperty("Emotion Detection", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_F
 # ---------------------------------------------------------------------------
 def drive_toward_face(face_cx: int, emotion: str) -> None:
     """
-    Centra la primera cara en X girando o avanzando.
+    Mueve el robot hacia la cara detectada coordinando servo y tanque.
+
+    Estrategia de dos niveles:
+      · Servo NO en límite → servo corrige la orientación; tanque solo avanza.
+      · Servo EN límite    → tanque gira para realinear el cuerpo (servo agotado).
+
     Respeta motor_pause del BEHAVIOR (emociones negativas → quieto = presencia).
     """
     if behavior.motor_should_pause(emotion):
         arduino.tank.stop()
         return
 
-    error_x = face_cx - FRAME_CX
+    # Si el servo puede corregir la orientación, el tanque solo avanza
+    if not cam_servo.at_pan_limit:
+        if arduino.can_move_forward:
+            arduino.tank.forward(FWD_SPEED)
+        else:
+            arduino.tank.stop()
+        return
 
+    # Servo en su límite mecánico → tanque gira para realinear el cuerpo
+    error_x = face_cx - FRAME_CX
     if abs(error_x) <= DEAD_ZONE_X:
         if arduino.can_move_forward:
             arduino.tank.forward(FWD_SPEED)
@@ -310,12 +334,13 @@ try:
 
         out.write(frame)
 
-        try:
-            cv2.imshow("Emotion Detection", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
-        except Exception:
-            pass   # SSH sin display — ignorar
+        if _has_display:
+            try:
+                cv2.imshow("Emotion Detection", frame)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
+            except Exception:
+                pass   # display perdido — ignorar
 
 except KeyboardInterrupt:
     print("\nDetenido por el usuario.")
