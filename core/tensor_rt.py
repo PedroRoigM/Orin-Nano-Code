@@ -20,7 +20,6 @@ import numpy as np
 import onnxruntime as ort
 from collections import Counter
 import time
-from time import time
 
 from face_detector                          import FaceDetector
 from processing.emotion_color_mapper        import EmotionColorMapper
@@ -153,7 +152,7 @@ out = cv2.VideoWriter(OUTPUT_PATH, cv2.VideoWriter_fourcc(*"mp4v"),
 boxes           = None
 det_probs       = None
 frame_count     = 0
-fps_time        = time()
+fps_time        = time.time()
 fps             = 0.0
 FRAME_CX        = FRAME_W // 2
 FRAME_CY        = FRAME_H // 2
@@ -229,8 +228,8 @@ try:
 
         # FPS cada 30 frames
         if frame_count % 30 == 0:
-            fps = 30 / (time() - fps_time)
-            fps_time = time()
+            fps = 30 / (time.time() - fps_time)
+            fps_time = time.time()
 
         # Detección de caras cada N frames
         if frame_count % DETECT_EVERY_N_FRAMES == 0:
