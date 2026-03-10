@@ -71,28 +71,34 @@ void EyeController::sanityTest()
     Serial.print(F(" ... "));
 
     Update(observerId + ":" + EYE_CMD_ON);
+    redraw();
+    delay(200);
 
     Update(observerId + ":" + EYE_CMD_FILL + ":255,0,0");
+    redraw();
     delay(300);
 
     Update(observerId + ":" + EYE_CMD_FILL + ":0,255,0");
+    redraw();
     delay(300);
 
     Update(observerId + ":" + EYE_CMD_FILL + ":0,0,255");
+    redraw();
     delay(300);
 
     Update(observerId + ":" + EYE_CMD_DRAW + ":neutral,255,255,255,0,0,0");
+    redraw();
     delay(300);
 
-    Update(observerId + ":" + EYE_CMD_MOVE + ":80,0");
-    redraw();
-    delay(200);
-    Update(observerId + ":" + EYE_CMD_MOVE + ":-80,0");
-    redraw();
-    delay(200);
-    Update(observerId + ":" + EYE_CMD_MOVE + ":0,0");
-    redraw();
-    delay(200);
+    // Update(observerId + ":" + EYE_CMD_MOVE + ":80,0");
+    // redraw();
+    // delay(200);
+    // Update(observerId + ":" + EYE_CMD_MOVE + ":-80,0");
+    // redraw();
+    // delay(200);
+    // Update(observerId + ":" + EYE_CMD_MOVE + ":0,0");
+    // redraw();
+    // delay(200);
 
     Update(observerId + ":" + EYE_CMD_OFF);
     delay(200);
@@ -109,8 +115,10 @@ void EyeController::Update(const String &message)
 
 // ─── parseMessage ─────────────────────────────────────────────────────────────
 //  Incoming format:  <observerId>:<CMD>[:<payload>]
+
 void EyeController::parseMessage(const String &message)
 {
+    // Format: EYE_<n>:<CMD>[:<payload>]
     int c1 = message.indexOf(':');
     if (c1 <= 0)
         return;
@@ -120,8 +128,7 @@ void EyeController::parseMessage(const String &message)
         return;
 
     int c2 = message.indexOf(':', c1 + 1);
-    String cmd = (c2 > 0) ? message.substring(c1 + 1, c2)
-                          : message.substring(c1 + 1);
+    String cmd = (c2 > 0) ? message.substring(c1 + 1, c2) : message.substring(c1 + 1);
     String payload = (c2 > 0) ? message.substring(c2 + 1) : String("");
 
     if (cmd == EYE_CMD_ON)
@@ -207,11 +214,14 @@ void EyeController::handleCmdOff()
 void EyeController::handleCmdFill(const String &payload)
 {
     const char *p = payload.c_str();
-    uint8_t r = (uint8_t)constrain(nextInt(p), 0, 255);
-    uint8_t g = (uint8_t)constrain(nextInt(p), 0, 255);
-    uint8_t b = (uint8_t)constrain(nextInt(p), 0, 255);
+    _bgR = (uint8_t)constrain(nextInt(p), 0, 255);
+    _bgG = (uint8_t)constrain(nextInt(p), 0, 255);
+    _bgB = (uint8_t)constrain(nextInt(p), 0, 255);
     if (_on)
-        fillScreen(rgb565(r, g, b));
+    {
+        fillScreen(rgb565(_bgR, _bgG, _bgB));
+        _dirty = true; // also redraws the pupil on top
+    }
     sendToSerial(String(observerId) + ":" + EYE_PREFIX + ":ok");
 }
 
@@ -239,9 +249,12 @@ void EyeController::handleCmdDraw(const String &payload)
 // MOVE:<x>,<y>    x/y: −100..+100
 void EyeController::handleCmdMove(const String &payload)
 {
+    sendToSerial("DEBUG: moving" + payload);
     const char *p = payload.c_str();
     _gx = constrain(nextInt(p), -100, 100);
     _gy = constrain(nextInt(p), -100, 100);
+    sendToSerial("New gx" + String(_gx) + "New gy" + String(_gy));
+    _dirty = true;
     // redraw() will interpolate smoothly on the next loop iterations
     sendToSerial(String(observerId) + ":" + EYE_PREFIX + ":ok");
 }
@@ -249,7 +262,6 @@ void EyeController::handleCmdMove(const String &payload)
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Draw primitives
 // ═══════════════════════════════════════════════════════════════════════════════
-
 void EyeController::fillScreen(uint16_t colour)
 {
     fillRect(0, 0, EYE_SCREEN_W - 1, EYE_SCREEN_H - 1, colour);
