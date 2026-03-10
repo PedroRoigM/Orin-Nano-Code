@@ -19,6 +19,7 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 from collections import Counter
+import time
 from time import time
 
 from face_detector                          import FaceDetector
@@ -112,6 +113,8 @@ cam_servo.center()
 arduino.buzzer.startup_chime()
 arduino.leds.on()
 arduino.eyes.on()   # wake up GC9A01 displays (sleep-out + display-on)
+time.sleep(0.5)
+arduino.eyes.draw("neutral", 200, 200, 180, 0, 0, 0)  # set _showEye=true en firmware
 
 # ---------------------------------------------------------------------------
 # Tira de LEDs NeoPixel/WS2812

@@ -97,29 +97,15 @@ class ArduinoController:
             print(f"[Arduino] Modo MOCK activado.")
         else:
             try:
-                # Abrir el puerto dispara DTR → reset del Arduino (USB re-enumera en Linux).
-                # Solución: abrir, esperar el boot, cerrar y reabrir para obtener un
-                # file-descriptor limpio tras la re-enumeración USB.
+                # Abrir el puerto dispara DTR → reset del Arduino.
+                # NO cerrar: cerrar volvería a bajar DTR y provocaría otro reset (bucle infinito).
+                # Solución: abrir UNA vez, esperar el boot y limpiar buffers.
                 self._ser = serial.Serial(port_name, baudrate, timeout=1)
-                print(f"[Arduino] Puerto abierto — esperando reset del Arduino (10 s)…")
-                time.sleep(10.0)
-                # El DTR provoca un reset + re-enumeración USB en Linux.
-                # Cerrar el descriptor stale y reintentar hasta que el puerto vuelva.
-                self._ser.close()
-                reopened = False
-                for attempt in range(10):
-                    time.sleep(1.0)
-                    try:
-                        self._ser = serial.Serial(port_name, baudrate, timeout=1)
-                        self._ser.reset_input_buffer()
-                        self._ser.reset_output_buffer()
-                        reopened = True
-                        print(f"[Arduino] Puerto reabierto (intento {attempt + 1}) — listo.")
-                        break
-                    except Exception:
-                        print(f"[Arduino] Reintentando apertura {attempt + 1}/10…")
-                if not reopened:
-                    raise RuntimeError(f"No se pudo reabrir {port_name} tras el reset del Arduino.")
+                print(f"[Arduino] Puerto abierto — esperando boot del Arduino (3 s)…")
+                time.sleep(3.0)
+                self._ser.reset_input_buffer()
+                self._ser.reset_output_buffer()
+                print(f"[Arduino] Listo.")
             except Exception as e:
                 print(f"[Arduino] Error al abrir {port_name}: {e}. Cayendo a modo MOCK.")
                 from controllers.mock_serial import MockSerial
