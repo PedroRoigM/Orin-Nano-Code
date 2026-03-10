@@ -97,9 +97,18 @@ class ArduinoController:
             print(f"[Arduino] Modo MOCK activado.")
         else:
             try:
+                # Abrir el puerto dispara DTR → reset del Arduino (USB re-enumera en Linux).
+                # Solución: abrir, esperar el boot, cerrar y reabrir para obtener un
+                # file-descriptor limpio tras la re-enumeración USB.
                 self._ser = serial.Serial(port_name, baudrate, timeout=1)
                 print(f"[Arduino] Puerto abierto — esperando reset del Arduino (10 s)…")
-                time.sleep(10.0)   # el DTR activa el reset del Arduino; esperar a que arranque
+                time.sleep(10.0)
+                self._ser.close()
+                time.sleep(0.5)   # pausa para que el OS registre la re-enumeración
+                self._ser = serial.Serial(port_name, baudrate, timeout=1)
+                self._ser.reset_input_buffer()
+                self._ser.reset_output_buffer()
+                print(f"[Arduino] Puerto reabierto y listo.")
             except Exception as e:
                 print(f"[Arduino] Error al abrir {port_name}: {e}. Cayendo a modo MOCK.")
                 from controllers.mock_serial import MockSerial
