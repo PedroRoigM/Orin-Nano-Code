@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # setup_orin.sh
-# Crea/activa el entorno virtual ~/venv_cuda, comprueba las librerías del proyecto
-# y lanza tensor_rt_orin.py en la Jetson Orin Nano.
+# Clona/actualiza el repositorio, crea/activa el entorno virtual ~/venv_cuda,
+# comprueba las librerías del proyecto y lanza tensor_rt.py en la Jetson Orin Nano.
 #
 # Uso:
 #   chmod +x setup_orin.sh
@@ -9,9 +9,15 @@
 
 set -euo pipefail
 
+# ── CONFIGURA AQUÍ ────────────────────────────────────────────────────────────
+REPO_URL="https://github.com/PedroRoigM/Orin-Nano-Code.git"
+GIT_USER=""          # tu usuario de GitHub
+GIT_EMAIL=""         # tu email de GitHub
+GIT_TOKEN=""         # Personal Access Token (GitHub → Settings → Developer settings → PAT)
 PROJECT_DIR="/home/jetson/prueba"
 VENV_DIR="$HOME/venv_cuda"
-MAIN_SCRIPT="core/tensor_rt_orin.py"
+MAIN_SCRIPT="core/tensor_rt.py"
+# ─────────────────────────────────────────────────────────────────────────────
 
 RED='\033[0;31m'
 GRN='\033[0;32m'
@@ -23,16 +29,42 @@ warn() { echo -e "${YEL}[WARN]${NC} $*"; }
 fail() { echo -e "${RED}[FAIL]${NC} $*"; }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 0. Pinmux — configurar pines DC (18) y RST (22) como salida
+# 0. Repositorio — clonar si no existe, actualizar si ya existe
+# ─────────────────────────────────────────────────────────────────────────────
+echo ""
+echo "=== Repositorio ==="
+
+if [ -z "$GIT_USER" ] || [ -z "$GIT_TOKEN" ]; then
+    warn "GIT_USER o GIT_TOKEN vacíos — se omite git clone/pull (configúralos al inicio del script)"
+else
+    REPO_AUTH_URL="https://${GIT_USER}:${GIT_TOKEN}@${REPO_URL#https://}"
+
+    if [ ! -d "$PROJECT_DIR/.git" ]; then
+        echo "  Clonando repositorio en $PROJECT_DIR ..."
+        git clone "$REPO_AUTH_URL" "$PROJECT_DIR"
+        git -C "$PROJECT_DIR" config user.email "$GIT_EMAIL"
+        git -C "$PROJECT_DIR" config user.name  "$GIT_USER"
+        ok "Repositorio clonado en $PROJECT_DIR"
+    else
+        echo "  Actualizando repositorio..."
+        git -C "$PROJECT_DIR" config user.email "$GIT_EMAIL"
+        git -C "$PROJECT_DIR" config user.name  "$GIT_USER"
+        git -C "$PROJECT_DIR" pull "$REPO_AUTH_URL"
+        ok "Repositorio actualizado"
+    fi
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. Pinmux — configurar pines DC (18) y RST (22) como salida
 #    Por defecto la Orin Nano los deja como INPUT hasta configurar el device tree
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
-echo "=== Configurando pinmux GPIO ==="
+echo "=== Configurando pinmux GPIO (sección 1) ==="
 sudo busybox devmem 0x243D010 w 0x5 && ok "Pin 18 (DC)  → OUTPUT" || warn "Pin 18 (DC)  — fallo al configurar pinmux"
 sudo busybox devmem 0x243D000 w 0x5 && ok "Pin 22 (RST) → OUTPUT" || warn "Pin 22 (RST) — fallo al configurar pinmux"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. Entorno virtual
+# 2. Entorno virtual
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Entorno virtual: $VENV_DIR ==="
@@ -50,7 +82,7 @@ source "$VENV_DIR/bin/activate"
 ok "Entorno virtual activado: $(python3 --version)"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. Actualizar pip
+# 3. Actualizar pip
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Actualizando pip ==="
@@ -58,7 +90,7 @@ pip install --quiet --upgrade pip
 ok "pip actualizado: $(pip --version)"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. Librerías del sistema (JetPack) — solo verificar importabilidad
+# 4. Librerías del sistema (JetPack) — solo verificar importabilidad
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Librerías del sistema (JetPack / CUDA) ==="
@@ -133,7 +165,7 @@ if [ "$MISSING_SYSTEM" -ne 0 ]; then
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4. Librerías pip — instalar si faltan
+# 5. Librerías pip — instalar si faltan
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Librerías pip ==="
@@ -172,7 +204,7 @@ install_if_missing "sounddevice"    "sounddevice"            "sounddevice"
 install_if_missing "PIL"            "Pillow"                 "Pillow (PIL)"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. Permisos GPIO (aviso, no bloquea)
+# 6. Permisos GPIO (aviso, no bloquea)
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Permisos ==="
@@ -185,7 +217,7 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6. Verificar que el script principal existe
+# 7. Verificar que el script principal existe
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Proyecto ==="
@@ -203,11 +235,11 @@ fi
 ok "Script principal: $MAIN_SCRIPT"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 7. Lanzar
+# 8. Lanzar
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
 echo "================================================================="
-echo "  Lanzando tensor_rt_orin.py — Ctrl+C para detener"
+echo "  Lanzando $MAIN_SCRIPT — Ctrl+C para detener"
 echo "================================================================="
 echo ""
 

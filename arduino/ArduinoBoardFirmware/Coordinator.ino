@@ -1,6 +1,6 @@
 #include "Coordinator.h"
 
-Coordinator::Coordinator()
+Coordinator::Coordinator() : _rxLen(0)
 {
     _ledObservers.setStorage(_ledStorage, MAX_LED_OBSERVERS, 0);
     _lcdObservers.setStorage(_lcdStorage, MAX_LCD_OBSERVERS, 0);
@@ -63,43 +63,57 @@ void Coordinator::Notify(const String &type, const String &message)
 // ---------------------------------------------------------------------------
 // readAndRoute()
 //
+// Non-blocking: consumes all available serial bytes into _rxBuf one char at
+// a time (same approach as eyes_test.ino).  When a complete line ('\n' or
+// '\r') is assembled it tokenises, validates and dispatches — then returns
+// immediately so loop() can call eyeLeft.redraw() / eyeRight.redraw() on
+// every iteration without being starved by a blocking readStringUntil().
+//
 // Protocol:  {BASE_ID}:{SPECIFIC_ID}:{COMMAND}   (newline-terminated)
 // Examples:
-//   US:US_1:PING
-//   LED:LED_2:ON
-//   MOT:MOT_3:FWD,200
-//   EYES:EYES_1:happy,255,200,0,10,0
-//   GAZE:EYES_1:30,-10
-//
-// Delegates to three helpers:
-//   parseMessage()    — reads Serial and tokenises the line
-//   isValidMessage()  — validates each field, prints errors
-//   dispatchCommand() — routes the command to the matching observer
+//   EYE:EYE_1:DRAW:neutral,255,255,255,0,0,0
+//   EYE:EYE_1:MOVE:30,-10
+//   LED:LED_1:ON
+//   BUZZ:BUZZ_1:SOUND:440,200
 // ---------------------------------------------------------------------------
 void Coordinator::readAndRoute()
 {
+    while (Serial.available())
+    {
+        char c = (char)Serial.read();
 
-    String baseId, specificId, command;
+        if (c == '\n' || c == '\r')
+        {
+            if (_rxLen == 0)
+                continue;   // blank line — skip
 
-    if (!parseMessage(baseId, specificId, command))
-        return;
+            _rxBuf[_rxLen] = '\0';
+            String line(_rxBuf);
+            _rxLen = 0;
 
-    if (!isValidMessage(baseId, specificId, command))
-        return;
+            String baseId, specificId, command;
+            if (!parseMessage(line, baseId, specificId, command))
+                return;
+            if (!isValidMessage(baseId, specificId, command))
+                return;
+            dispatchCommand(baseId, specificId, command);
+            return;   // one command per call keeps loop() responsive
+        }
 
-    dispatchCommand(baseId, specificId, command);
+        if (_rxLen < (uint8_t)(sizeof(_rxBuf) - 1))
+            _rxBuf[_rxLen++] = c;
+    }
 }
 
 // ---------------------------------------------------------------------------
 // parseMessage()
 //
-// Reads one newline-terminated line from Serial and splits it into the three
-// protocol fields.  Returns false if the line is empty or malformed.
+// Tokenises an already-complete line into the three protocol fields.
+// Returns false if the line is empty or malformed.
+// (Serial reading is now handled by readAndRoute() non-blocking accumulator.)
 // ---------------------------------------------------------------------------
-bool Coordinator::parseMessage(String &baseId, String &specificId, String &command)
+bool Coordinator::parseMessage(const String &line, String &baseId, String &specificId, String &command)
 {
-    String line = Serial.readStringUntil('\n');
-    line.trim();
     if (line.length() == 0)
         return false;
 

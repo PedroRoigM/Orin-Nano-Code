@@ -10,6 +10,7 @@ class FaceDetector:
         det_size: tuple[int, int] = (640, 480),
         conf_threshold: float = 0.5,
         model_pack: str = "buffalo_s",  # También existe buffalo_l que es mejor pero más pesado. Va desde sc hasta l
+        ctx_id: int = -1,               # -1=CPU, 0=GPU CUDA (usar 0 en Jetson)
     ) -> None:
 
         self._conf = conf_threshold
@@ -18,7 +19,7 @@ class FaceDetector:
             name=model_pack,
             allowed_modules=["detection"],
         )
-        self._app.prepare(ctx_id=-1, det_size=det_size)
+        self._app.prepare(ctx_id=ctx_id, det_size=det_size)
         print(
             f"[FaceDetector] SCRFD ({model_pack}) preparado — "
             f"det_size={det_size}, conf={conf_threshold}"

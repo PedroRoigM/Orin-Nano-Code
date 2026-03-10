@@ -48,8 +48,12 @@ private:
     Vector<IObserver *> *listForType(const String &type);
     void notifyList(Vector<IObserver *> &list, const String &message);
 
+    // Non-blocking serial line accumulator (replaces Serial.readStringUntil)
+    char    _rxBuf[128];
+    uint8_t _rxLen;
+
     // readAndRoute() helpers
-    bool parseMessage(String &baseId, String &specificId, String &command);
+    bool parseMessage(const String &line, String &baseId, String &specificId, String &command);
     bool isValidMessage(const String &baseId, const String &specificId, const String &command);
     void dispatchCommand(const String &baseId, const String &specificId, const String &command);
 };
