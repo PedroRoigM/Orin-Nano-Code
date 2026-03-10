@@ -25,9 +25,10 @@ from facenet_pytorch import MTCNN
 import torch
 from time import time
 
-from processing.emotion_color_mapper   import EmotionColorMapper
-from controllers.arduino_controller    import ArduinoController
-from companion_behavior                import BehaviorEngine, BEHAVIOR
+from processing.emotion_color_mapper        import EmotionColorMapper
+from controllers.arduino_controller         import ArduinoController
+from controllers.camera_servo_controller    import CameraServoController
+from companion_behavior                     import BehaviorEngine, BEHAVIOR
 
 # ---------------------------------------------------------------------------
 # Configuración — editar aquí para ajustar el comportamiento general
@@ -42,13 +43,16 @@ EMOTIONS = ["neutral", "happiness", "surprise", "sadness",
 
 # Arduino
 ARDUINO_PORT         = "/dev/ttyACM0"
-ARDUINO_BAUD         = 9600
+ARDUINO_BAUD         = 115200
 ULTRASONIC_THRESHOLD = 10.0        # cm — detener motor y alertar por debajo de este valor
 
 # Seguimiento de cara con el motor
 DEAD_ZONE_X = 60                   # px de margen alrededor del centro (zona muerta)
 TURN_SPEED  = 45                   # velocidad de giro (1-127)
 FWD_SPEED   = 40                   # velocidad de avance (1-127)
+
+# Ultrasónico — frecuencia de ping
+ULTRASONIC_PING_HZ = 2             # pings por segundo (el firmware solo mide bajo petición)
 
 # ---------------------------------------------------------------------------
 # TensorRT — motor de inferencia de emociones
@@ -122,11 +126,11 @@ arduino.start()
 def _on_obstacle(cm: float) -> None:
     """
     Se ejecuta automáticamente cuando el sensor ultrasónico detecta un obstáculo.
-    El robot se detiene, los LEDs parpadean y el buzzer emite una alerta proporcional.
+    El robot se detiene, los LEDs parpadean y el buzzer emite una alerta.
     """
     arduino.tank.stop()
     arduino.leds.blink()
-    arduino.buzzer.react_to_obstacle(cm, ULTRASONIC_THRESHOLD)
+    arduino.buzzer.beep(800, 300)
     print(f"[Obstacle] Obstáculo detectado a {cm:.1f} cm — motor detenido")
 
 arduino.on_obstacle = _on_obstacle
@@ -135,27 +139,22 @@ arduino.on_obstacle = _on_obstacle
 # BehaviorEngine — motor de comportamiento médico
 # Los ojos se controlan a través de arduino.eyes (EyesController → SERIAL → Arduino → SPI)
 # ---------------------------------------------------------------------------
-behavior = BehaviorEngine(arduino=arduino, eyes=arduino.eyes)
+behavior   = BehaviorEngine(arduino=arduino, eyes=arduino.eyes)
+cam_servo  = CameraServoController(arduino._port, verbose=False)
+cam_servo.center()
 
-# Mensaje y chime de arranque
-arduino.lcd.display_two_lines("Robot medico", "Listo :)")
+# Chime y estado visual de arranque
 arduino.buzzer.startup_chime()
 arduino.leds.on()
 
 # ---------------------------------------------------------------------------
-# Tira de LEDs NeoPixel/WS2812 — stub
+# Tira de LEDs NeoPixel/WS2812
+# Envía el color terapéutico de BEHAVIOR a LED_1 y LED_2 via ArduinoBoardFirmware.
+# Protocolo: LED:LED_1:COLOR:r,g,b  y  LED:LED_2:COLOR:r,g,b
 # ---------------------------------------------------------------------------
-# Cuando el firmware Arduino soporte NeoPixel, reemplazar el cuerpo de esta
-# función con la llamada al controlador correspondiente, por ejemplo:
-#   arduino.led_strip.set_color(r, g, b)
 def set_led_strip(r: int, g: int, b: int) -> None:
-    """
-    Establece el color de la tira de LEDs NeoPixel.
-    Stub activo — conectar al firmware cuando esté disponible.
-    """
-    pass
-    # Descomentar para debug:
-    # print(f"[LED_STRIP] → RGB({r:3d},{g:3d},{b:3d})")
+    """Establece el color de los LEDs (NeoPixel). Enviado por ARDUINO_PORT."""
+    arduino.leds.set_color(r, g, b)
 
 # ---------------------------------------------------------------------------
 # Cámara CSI Jetson via GStreamer
@@ -185,6 +184,8 @@ fps             = 0.0
 FRAME_CX        = FRAME_W // 2
 FRAME_CY        = FRAME_H // 2
 current_emotion = "neutral"
+_last_ping_t    = 0.0
+_prev_had_face  = False   # para detectar transición no-cara → cara
 
 print("Grabando... Pulsa Ctrl+C para detener.")
 cv2.namedWindow("Emotion Detection", cv2.WINDOW_NORMAL)
@@ -237,6 +238,12 @@ try:
 
         frame_count += 1
 
+        # Ping ultrasónico periódico (firmware solo mide bajo petición)
+        now = time()
+        if now - _last_ping_t >= 1.0 / ULTRASONIC_PING_HZ:
+            arduino.ultrasonic.ping()
+            _last_ping_t = now
+
         # FPS cada 30 frames
         if frame_count % 30 == 0:
             fps = 30 / (time() - fps_time)
@@ -278,6 +285,11 @@ try:
                     face_cx = (x1 + x2) // 2
                     face_cy = (y1 + y2) // 2
 
+                    # Sonido de bienvenida al detectar la primera cara
+                    if not _prev_had_face:
+                        arduino.buzzer.beep(520, 80)   # Do (C5) suave — "te veo"
+                    _prev_had_face = True
+
                     # Aplicar comportamiento médico (ojos siguen la cara cada frame;
                     # LEDs, buzzer y LCD solo cambian cuando la emoción es estable)
                     changed = behavior.apply(
@@ -296,12 +308,17 @@ try:
                         print(f"[Behavior] {tag:10s} | conf={emo_conf:.0%} "
                               f"| strip=RGB({r},{g},{b})")
 
+                    # Servo de cámara — sigue la cara
+                    cam_servo.track(face_cx, face_cy, FRAME_W, FRAME_H)
+
                     # Movimiento del robot (respeta motor_pause del BEHAVIOR)
                     drive_toward_face(face_cx, emotion)
 
         else:
             # Sin cara: modo espera
+            _prev_had_face = False
             arduino.tank.stop()
+            cam_servo.update_idle()
             behavior.apply("no_face")
             r, g, b = behavior.get_led_strip_color("no_face")
             set_led_strip(r, g, b)
@@ -326,6 +343,7 @@ except KeyboardInterrupt:
     print("\nDetenido por el usuario.")
 
 finally:
+    cam_servo.close()
     arduino.stop()
     cap.release()
     out.release()
