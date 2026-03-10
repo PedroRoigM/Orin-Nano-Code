@@ -255,6 +255,7 @@ class BehaviorEngine:
         self._last_emotion = ""   # última emoción recibida (para conteo)
         self._stable_count = 0    # frames consecutivos con la misma emoción
         self._prev_emotion = ""   # última emoción que llegó a los actuadores
+        self._last_eyes_update = time.time()
 
     # ── API pública ───────────────────────────────────────────────────────────
 
