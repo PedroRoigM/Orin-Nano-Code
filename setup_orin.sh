@@ -179,10 +179,44 @@ echo "  Fijando numpy<2 (compatibilidad con torch JetPack e insightface)..."
 pip install --quiet "numpy<2"
 ok "numpy $(python3 -c 'import numpy; print(numpy.__version__)')"
 
-install_if_missing "cv2"            "opencv-python"          "opencv-python (cv2)"
+# cv2: usar SIEMPRE el OpenCV de NVIDIA/JetPack (/usr/lib/python3.10/dist-packages/cv2)
+# El pip opencv-python y opencv-python-headless NO tienen GStreamer — eliminarlos si están presentes
+for PKG in opencv-python opencv-python-headless; do
+    if pip show "$PKG" &>/dev/null; then
+        echo "  Desinstalando $PKG de pip (no tiene GStreamer)..."
+        pip uninstall -y --quiet "$PKG"
+    fi
+done
+# Verificar que el cv2 del sistema (NVIDIA) tiene GStreamer
+GSTREAMER_OK=$(python3 -c "
+try:
+    import cv2
+    info = cv2.getBuildInformation()
+    idx = info.find('GStreamer')
+    print('YES' if idx >= 0 and 'YES' in info[idx:idx+50] else 'NO')
+except Exception:
+    print('MISSING')
+" 2>/dev/null)
+if [ "$GSTREAMER_OK" = "YES" ]; then
+    ok "opencv NVIDIA $(python3 -c 'import cv2; print(cv2.__version__)') (GStreamer: YES)"
+elif [ "$GSTREAMER_OK" = "NO" ]; then
+    warn "opencv encontrado pero SIN GStreamer — verifica que libopencv-python 4.8.0 de NVIDIA esté instalado"
+else
+    fail "opencv no encontrado — ejecuta: sudo apt install libopencv-python"
+fi
 install_if_missing "serial"         "pyserial"               "pyserial"
 install_if_missing "spidev"         "spidev"                 "spidev"
-install_if_missing "onnxruntime"    "onnxruntime-gpu"        "onnxruntime-gpu"
+# onnxruntime-gpu no existe en PyPI para aarch64 — usar la versión CPU (el código hace fallback automático)
+if ! python3 -c "import onnxruntime" 2>/dev/null; then
+    echo "  Instalando onnxruntime (aarch64 — versión CPU con fallback a CUDA/TRT si disponible)..."
+    if pip install --quiet onnxruntime; then
+        ok "onnxruntime (instalado)"
+    else
+        fail "onnxruntime — error al instalar"
+    fi
+else
+    ok "onnxruntime"
+fi
 install_if_missing "insightface"    "insightface"            "insightface"
 # Jetson.GPIO: siempre instalar en el venv para que la versión pip
 # (con soporte Orin Nano) tome prioridad sobre la del sistema (/usr/lib/...)
