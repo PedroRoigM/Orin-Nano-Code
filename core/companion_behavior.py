@@ -47,6 +47,7 @@ CÓMO EDITAR:
 """
 
 from typing import Optional
+import time
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Paleta terapéutica para iris de los ojos (GC9A01, RGB)
