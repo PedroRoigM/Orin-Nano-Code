@@ -42,6 +42,7 @@ private:
 
     // ── Display state ────────────────────────────────────────────────────────
     bool _on;
+    bool _showEye; // true = draw eye capsule; false = fill-only mode (no eye)
 
     // Target values (set by commands)
     uint8_t _r, _g, _b;       // eye colour

@@ -10,6 +10,7 @@ EyeController::EyeController(const String &id,
       _pinCs(pinCs), _pinDc(pinDc), _pinRst(pinRst),
       _pinMosi(pinMosi), _pinSclk(pinSclk),
       _on(false),
+      _showEye(false),
       _r(255), _g(255), _b(255),
       _bgR(0), _bgG(0), _bgB(0),
       _gx(0), _gy(0),
@@ -48,18 +49,14 @@ void EyeController::begin()
     csHigh();
     dcHigh();
 
-    // SPI is assumed to be started by the caller (SPI.begin() +
-    // SPI.beginTransaction()).  If only one display is present the caller
-    // can hand ownership entirely; for multiple displays the transaction must
-    // be re-entered around every transfer.  We call beginTransaction here so a
-    // single-display sketch works out of the box.
     SPI.begin();
     SPI.beginTransaction(SPISettings(8000000, MSBFIRST, SPI_MODE0));
 
     initGC9A01();
     fillScreen(rgb565(_bgR, _bgG, _bgB));
 
-    sendToSerial(String(observerId) + ":" + EYE_READY_PREFIX + ":ok");
+    // Output: EYE_<n>:READY:ok
+    sendToSerial(String(EYE_READY_PREFIX) + ":ok");
     _on = true;
 }
 
@@ -70,36 +67,39 @@ void EyeController::sanityTest()
     Serial.print(observerId);
     Serial.print(F(" ... "));
 
-    Update(observerId + ":" + EYE_CMD_ON);
-    redraw();
-    delay(200);
-
+    // FILL: solid red
     Update(observerId + ":" + EYE_CMD_FILL + ":255,0,0");
-    redraw();
-    delay(300);
+    delay(400);
 
+    // FILL: solid green
     Update(observerId + ":" + EYE_CMD_FILL + ":0,255,0");
-    redraw();
-    delay(300);
+    delay(400);
 
+    // FILL: solid blue
     Update(observerId + ":" + EYE_CMD_FILL + ":0,0,255");
-    redraw();
-    delay(300);
+    delay(400);
 
+    // DRAW: white eye on black background, centred
     Update(observerId + ":" + EYE_CMD_DRAW + ":neutral,255,255,255,0,0,0");
     redraw();
+    delay(400);
+
+    // MOVE: look right
+    Update(observerId + ":" + EYE_CMD_MOVE + ":80,0");
+    redraw();
     delay(300);
 
-    // Update(observerId + ":" + EYE_CMD_MOVE + ":80,0");
-    // redraw();
-    // delay(200);
-    // Update(observerId + ":" + EYE_CMD_MOVE + ":-80,0");
-    // redraw();
-    // delay(200);
-    // Update(observerId + ":" + EYE_CMD_MOVE + ":0,0");
-    // redraw();
-    // delay(200);
+    // MOVE: look left
+    Update(observerId + ":" + EYE_CMD_MOVE + ":-80,0");
+    redraw();
+    delay(300);
 
+    // MOVE: centre
+    Update(observerId + ":" + EYE_CMD_MOVE + ":0,0");
+    redraw();
+    delay(300);
+
+    // OFF / ON cycle
     Update(observerId + ":" + EYE_CMD_OFF);
     delay(200);
     Update(observerId + ":" + EYE_CMD_ON);
@@ -114,11 +114,10 @@ void EyeController::Update(const String &message)
 }
 
 // ─── parseMessage ─────────────────────────────────────────────────────────────
-//  Incoming format:  <observerId>:<CMD>[:<payload>]
-
+// Incoming format (after Coordinator strips the base type):
+//   EYE_<n>:<CMD>[:<payload>]
 void EyeController::parseMessage(const String &message)
 {
-    // Format: EYE_<n>:<CMD>[:<payload>]
     int c1 = message.indexOf(':');
     if (c1 <= 0)
         return;
@@ -128,7 +127,8 @@ void EyeController::parseMessage(const String &message)
         return;
 
     int c2 = message.indexOf(':', c1 + 1);
-    String cmd = (c2 > 0) ? message.substring(c1 + 1, c2) : message.substring(c1 + 1);
+    String cmd = (c2 > 0) ? message.substring(c1 + 1, c2)
+                          : message.substring(c1 + 1);
     String payload = (c2 > 0) ? message.substring(c2 + 1) : String("");
 
     if (cmd == EYE_CMD_ON)
@@ -144,11 +144,12 @@ void EyeController::parseMessage(const String &message)
 }
 
 // ─── redraw ───────────────────────────────────────────────────────────────────
-//  Must be called every loop() iteration.
-//  Smoothly interpolates gaze and repaints only when something changed.
+// Must be called every loop() iteration.
+// Smoothly interpolates gaze and repaints only when something changed.
+// Does nothing in fill-only mode (_showEye == false).
 void EyeController::redraw()
 {
-    if (!_on)
+    if (!_on || !_showEye)
         return;
 
     // Compute pixel target from normalised gaze (−100..+100)
@@ -169,9 +170,7 @@ void EyeController::redraw()
     if (posChanged || colourChanged || _dirty)
     {
         _dirty = false;
-        uint16_t eyeCol = rgb565(_r, _g, _b);
-        uint16_t bgCol = rgb565(_bgR, _bgG, _bgB);
-        drawEye(icx, icy, eyeCol, bgCol);
+        drawEye(icx, icy, rgb565(_r, _g, _b), rgb565(_bgR, _bgG, _bgB));
         _dCx = icx;
         _dCy = icy;
         _dR = _r;
@@ -187,6 +186,7 @@ void EyeController::redraw()
 //  Command handlers
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// EYE:EYE_<n>:ON
 void EyeController::handleCmdOn()
 {
     if (_on)
@@ -197,9 +197,11 @@ void EyeController::handleCmdOn()
     delay(20); // Display-On
     _on = true;
     _dirty = true; // repaint on next redraw()
-    sendToSerial(String(observerId) + ":" + EYE_PREFIX + ":ok");
+    // Output: EYE_<n>:EYE:ok
+    sendToSerial(String(EYE_PREFIX) + ":ok");
 }
 
+// EYE:EYE_<n>:OFF
 void EyeController::handleCmdOff()
 {
     if (!_on)
@@ -207,33 +209,38 @@ void EyeController::handleCmdOff()
     gcCmd(0x28); // Display-Off
     gcCmd(0x10); // Sleep-In
     _on = false;
-    sendToSerial(String(observerId) + ":" + EYE_PREFIX + ":ok");
+    // Output: EYE_<n>:EYE:ok
+    sendToSerial(String(EYE_PREFIX) + ":ok");
 }
 
-// FILL:<r>,<g>,<b>
+// EYE:EYE_<n>:FILL:<r>,<g>,<b>
+// Paints the entire screen in one solid colour. No eye is drawn.
 void EyeController::handleCmdFill(const String &payload)
 {
     const char *p = payload.c_str();
-    _bgR = (uint8_t)constrain(nextInt(p), 0, 255);
-    _bgG = (uint8_t)constrain(nextInt(p), 0, 255);
-    _bgB = (uint8_t)constrain(nextInt(p), 0, 255);
+    uint8_t r = (uint8_t)constrain(nextInt(p), 0, 255);
+    uint8_t g = (uint8_t)constrain(nextInt(p), 0, 255);
+    uint8_t b = (uint8_t)constrain(nextInt(p), 0, 255);
+
+    // Switch to fill-only mode — redraw() will not paint the eye capsule
+    _showEye = false;
+
     if (_on)
-    {
-        fillScreen(rgb565(_bgR, _bgG, _bgB));
-        _dirty = true; // also redraws the pupil on top
-    }
-    sendToSerial(String(observerId) + ":" + EYE_PREFIX + ":ok");
+        fillScreen(rgb565(r, g, b));
+
+    // Output: EYE_<n>:EYE:ok
+    sendToSerial(String(EYE_PREFIX) + ":ok");
 }
 
-// DRAW:<shape>,<r>,<g>,<b>,<bg_r>,<bg_g>,<bg_b>
-//   shape: neutral  (only one supported for now)
+// EYE:EYE_<n>:DRAW:<shape>,<r>,<g>,<b>,<bg_r>,<bg_g>,<bg_b>
+// Switches to eye-drawing mode.  Only "neutral" shape is implemented.
+// Fills the screen with the new background first so no FILL artefacts remain.
 void EyeController::handleCmdDraw(const String &payload)
 {
-    // Consume the shape token (text up to first comma)
+    // Consume the shape token (text up to first comma) — reserved for future shapes
     int comma = payload.indexOf(',');
     if (comma < 0)
         return;
-    // String shape = payload.substring(0, comma);  // reserved for future shapes
 
     const char *p = payload.c_str() + comma + 1;
     _r = (uint8_t)constrain(nextInt(p), 0, 255);
@@ -242,26 +249,49 @@ void EyeController::handleCmdDraw(const String &payload)
     _bgR = (uint8_t)constrain(nextInt(p), 0, 255);
     _bgG = (uint8_t)constrain(nextInt(p), 0, 255);
     _bgB = (uint8_t)constrain(nextInt(p), 0, 255);
-    _dirty = true; // colour changed → force redraw() repaint
-    sendToSerial(String(observerId) + ":" + EYE_PREFIX + ":ok");
+
+    // Fill the whole screen with the new background so any previous FILL or
+    // eye-colour is fully cleared before the capsule is painted on top.
+    if (_on)
+        fillScreen(rgb565(_bgR, _bgG, _bgB));
+
+    // Reset draw-state so the very next redraw() repaints the full bounding box
+    _dCx = EYE_CX;
+    _dCy = EYE_CY;
+    _fCx = (float)EYE_CX;
+    _fCy = (float)EYE_CY;
+
+    _showEye = true;
+    _dirty = true; // force repaint on next redraw()
+
+    // Output: EYE_<n>:EYE:ok
+    sendToSerial(String(EYE_PREFIX) + ":ok");
 }
 
-// MOVE:<x>,<y>    x/y: −100..+100
+// EYE:EYE_<n>:MOVE:<x>,<y>    x/y: −100..+100
+// Updates the gaze target; redraw() handles the smooth interpolation.
+// Only meaningful in DRAW mode (_showEye == true).
 void EyeController::handleCmdMove(const String &payload)
 {
-    sendToSerial("DEBUG: moving" + payload);
-    const char *p = payload.c_str();
-    _gx = constrain(nextInt(p), -100, 100);
-    _gy = constrain(nextInt(p), -100, 100);
-    sendToSerial("New gx" + String(_gx) + "New gy" + String(_gy));
-    _dirty = true;
-    // redraw() will interpolate smoothly on the next loop iterations
-    sendToSerial(String(observerId) + ":" + EYE_PREFIX + ":ok");
+
+    int comma = payload.indexOf(',');
+
+    if (comma > 0)
+    {
+        int gx = payload.substring(0, comma).toInt();
+        int gy = payload.substring(comma + 1).toInt();
+
+        _gx = constrain(gx, -100, 100);
+        _gy = constrain(gy, -100, 100);
+    }
+
+    sendToSerial(String(EYE_PREFIX) + ":ok");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Draw primitives
 // ═══════════════════════════════════════════════════════════════════════════════
+
 void EyeController::fillScreen(uint16_t colour)
 {
     fillRect(0, 0, EYE_SCREEN_W - 1, EYE_SCREEN_H - 1, colour);
@@ -540,8 +570,6 @@ void EyeController::initGC9A01()
 //  Low-level SPI helpers
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Blocking single-byte SPI write using hardware SPDR on AVR,
-// falling back to SPI.transfer() on other architectures.
 void EyeController::spiWrite(uint8_t b)
 {
 #if defined(SPDR) && defined(SPIF)
