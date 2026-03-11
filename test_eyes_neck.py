@@ -88,27 +88,27 @@ time.sleep(1.5)
 # ── SERVOS CUELLO ─────────────────────────────────────────────────────────────
 
 pause("NECK — centro (90, 90)", 0.5)
-arduino._port.send_line("NECK:NECK_1:90,90")
+arduino._port.send_line("NECK:NECK_1:MOVE:90,90")
 time.sleep(1.5)
 
 pause("NECK — girar izquierda (70, 90)", 0.5)
-arduino._port.send_line("NECK:NECK_1:70,90")
+arduino._port.send_line("NECK:NECK_1:MOVE:70,90")
 time.sleep(1.5)
 
 pause("NECK — girar derecha (110, 90)", 0.5)
-arduino._port.send_line("NECK:NECK_1:110,90")
+arduino._port.send_line("NECK:NECK_1:MOVE:110,90")
 time.sleep(1.5)
 
 pause("NECK — mirar arriba (90, 80)", 0.5)
-arduino._port.send_line("NECK:NECK_1:90,80")
+arduino._port.send_line("NECK:NECK_1:MOVE:90,80")
 time.sleep(1.5)
 
 pause("NECK — mirar abajo (90, 100)", 0.5)
-arduino._port.send_line("NECK:NECK_1:90,100")
+arduino._port.send_line("NECK:NECK_1:MOVE:90,100")
 time.sleep(1.5)
 
 pause("NECK — volver al centro (90, 90)", 0.5)
-arduino._port.send_line("NECK:NECK_1:90,90")
+arduino._port.send_line("NECK:NECK_1:MOVE:90,90")
 time.sleep(1.5)
 
 # ── Fin ───────────────────────────────────────────────────────────────────────

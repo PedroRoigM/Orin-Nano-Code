@@ -47,7 +47,6 @@ CÓMO EDITAR:
 """
 
 from typing import Optional
-import time
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Paleta terapéutica para iris de los ojos (GC9A01, RGB)
@@ -255,7 +254,6 @@ class BehaviorEngine:
         self._last_emotion = ""   # última emoción recibida (para conteo)
         self._stable_count = 0    # frames consecutivos con la misma emoción
         self._prev_emotion = ""   # última emoción que llegó a los actuadores
-        self._last_eyes_update = time.time()
 
     # ── API pública ───────────────────────────────────────────────────────────
 
@@ -353,29 +351,16 @@ class BehaviorEngine:
     def _update_eyes(self, emotion: str, gaze_x: float, gaze_y: float) -> None:
         """
         Actualiza mirada y color terapéutico en el controlador de ojos.
-        Limitado a máximo 2 actualizaciones por segundo (500ms entre llamadas).
-        El propio controlador (EyesController / MockEyes) gestiona el logging
-        [SERIAL →] y el filtro de cambio de emoción internamente.
+        El rate-limiting lo gestiona EyesController internamente (GAZE_UPDATE_HZ=20Hz).
+        No añadir throttle extra aquí — redundante y perjudica la fluidez del gaze.
         """
         if self._eyes is None:
             return
 
-        # Rate limiting: máximo 20 veces por segundo (50ms) — EyesController ya throttlea internamente
-        current_time = time.time()
-        if current_time - self._last_eyes_update < 0.05:
-            return
-        self._last_eyes_update = current_time
-
-        if emotion == "no_face":
-            # Usar move(0,0) en lugar de set_idle() — set_idle reinicia el throttle
-            # y causaría 20 envíos/s por ojo a 20 Hz, saturando el bus serial.
-            if hasattr(self._eyes, "move"):
-                self._eyes.move(0, 0)
-        else:
-            if hasattr(self._eyes, "update"):
-                beh = BEHAVIOR.get(emotion, BEHAVIOR["neutral"])
-                rgb = beh.get("eyes_rgb", _EYE_NEUTRAL)
-                self._eyes.update(gaze_x, gaze_y, emotion, iris_color_override=rgb)
+        if hasattr(self._eyes, "update"):
+            beh = BEHAVIOR.get(emotion, BEHAVIOR["neutral"])
+            rgb = beh.get("eyes_rgb", _EYE_NEUTRAL)
+            self._eyes.update(gaze_x, gaze_y, emotion, iris_color_override=rgb)
 
     def _apply_leds(self, b: dict) -> None:
         if self._arduino is None:
