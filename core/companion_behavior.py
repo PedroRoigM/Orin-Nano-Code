@@ -66,14 +66,14 @@ _EYE_CONTEMPT  = (110, 195, 185)  # verde-azulado — apaciguador
 # Misma filosofía: colores complementarios para calmar.
 # Intensidades bajas para no resultar invasivos en entornos clínicos.
 # ─────────────────────────────────────────────────────────────────────────────
-_STRIP_NEUTRAL   = ( 50,  45,  30)  # ámbar muy tenue — standby
-_STRIP_HAPPINESS = (  0, 160,  20)  # verde suave
-_STRIP_SURPRISE  = (  0, 140, 140)  # cian suave
-_STRIP_SADNESS   = (180,  70,   0)  # naranja cálido suave
-_STRIP_ANGER     = (  0,  35, 160)  # azul tranquilo
-_STRIP_DISGUST   = ( 90,  50, 140)  # lavanda tenue
-_STRIP_FEAR      = (160, 120,   0)  # dorado suave
-_STRIP_CONTEMPT  = ( 35, 120, 120)  # verde-azulado tenue
+_STRIP_NEUTRAL   = (120, 100,  60)  # ámbar — standby visible
+_STRIP_HAPPINESS = (  0, 220,  40)  # verde brillante
+_STRIP_SURPRISE  = (  0, 200, 200)  # cian vivo
+_STRIP_SADNESS   = (255, 100,   0)  # naranja cálido vivo
+_STRIP_ANGER     = (  0,  70, 255)  # azul intenso
+_STRIP_DISGUST   = (160,  80, 220)  # lavanda
+_STRIP_FEAR      = (255, 180,   0)  # dorado brillante
+_STRIP_CONTEMPT  = ( 60, 200, 190)  # verde-azulado
 
 # ─────────────────────────────────────────────────────────────────────────────
 # BEHAVIOR — Diccionario principal de comportamiento
@@ -351,16 +351,26 @@ class BehaviorEngine:
     def _update_eyes(self, emotion: str, gaze_x: float, gaze_y: float) -> None:
         """
         Actualiza mirada y color terapéutico en el controlador de ojos.
-        El rate-limiting lo gestiona EyesController internamente (GAZE_UPDATE_HZ=20Hz).
-        No añadir throttle extra aquí — redundante y perjudica la fluidez del gaze.
+
+        Separación crítica para evitar parpadeo visual:
+          · Shape/color → emoción ESTABLE confirmada (_prev_emotion).
+            draw() solo se envía cuando la emoción lleva EMOTION_STABILITY_FRAMES
+            frames consecutivos, evitando que el clasificador oscilante mande
+            DRAWs continuos que hacen parpadear el iris.
+          · Gaze (move) → posición RAW del frame actual para seguimiento fluido.
+
+        El rate-limiting de move() lo gestiona EyesController (GAZE_UPDATE_HZ=20Hz).
         """
         if self._eyes is None:
             return
+        if not hasattr(self._eyes, "update"):
+            return
 
-        if hasattr(self._eyes, "update"):
-            beh = BEHAVIOR.get(emotion, BEHAVIOR["neutral"])
-            rgb = beh.get("eyes_rgb", _EYE_NEUTRAL)
-            self._eyes.update(gaze_x, gaze_y, emotion, iris_color_override=rgb)
+        # Emoción estable: usa la última confirmada; fallback a la raw en el arranque.
+        stable = self._prev_emotion if self._prev_emotion else emotion
+        beh = BEHAVIOR.get(stable, BEHAVIOR["neutral"])
+        rgb = beh.get("eyes_rgb", _EYE_NEUTRAL)
+        self._eyes.update(gaze_x, gaze_y, stable, iris_color_override=rgb)
 
     def _apply_leds(self, b: dict) -> None:
         if self._arduino is None:
