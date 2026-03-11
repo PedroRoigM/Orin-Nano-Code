@@ -198,10 +198,17 @@ arduino.buzzer.startup_chime()
 arduino.leds.on()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Tira de LEDs NeoPixel (stub — activar cuando el firmware lo soporte)
+# Color de LEDs — deduplicado para no saturar el bus serial
 # ─────────────────────────────────────────────────────────────────────────────
+_last_led_rgb: tuple = (-1, -1, -1)
+
 def set_led_strip(r: int, g: int, b: int) -> None:
-    pass  # arduino.led_strip.set_color(r, g, b) cuando el firmware lo soporte
+    """Aplica el color terapéutico a los LEDs Arduino (deduplicado)."""
+    global _last_led_rgb
+    if (r, g, b) == _last_led_rgb:
+        return
+    _last_led_rgb = (r, g, b)
+    arduino.leds.set_color(r, g, b)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Cámara CSI via GStreamer
@@ -320,11 +327,14 @@ try:
                     )
 
                     if changed:
-                        r, g, b = behavior.get_led_strip_color(emotion)
-                        set_led_strip(r, g, b)
                         tag = BEHAVIOR.get(emotion, {}).get("log_tag", emotion)
+                        r, g, b = behavior.get_led_strip_color(emotion)
                         print(f"[Behavior] {tag:10s} | conf={emo_conf:.0%} "
-                              f"| strip=RGB({r},{g},{b})")
+                              f"| LED=RGB({r},{g},{b})")
+
+                    # LEDs: color activo en cada frame (deduplicado internamente)
+                    r, g, b = behavior.get_led_strip_color(current_emotion)
+                    set_led_strip(r, g, b)
 
                     drive_toward_face(face_cx, emotion)
                     cam_servo.track(face_cx, face_cy, FRAME_W, FRAME_H)
@@ -333,10 +343,10 @@ try:
             arduino.tank.stop()
             cam_servo.update_idle()
             behavior.apply("no_face")
-            r, g, b = behavior.get_led_strip_color("no_face")
-            set_led_strip(r, g, b)
             current_emotion = "no_face"
             current_conf    = 0.0
+            r, g, b = behavior.get_led_strip_color("no_face")
+            set_led_strip(r, g, b)
 
         # Diagnóstico cada 30 frames
         if frame_count % 30 == 0:
