@@ -92,12 +92,12 @@ EMOTIONS = ["neutral", "happiness", "surprise", "sadness",
             "anger",   "disgust",   "fear",     "contempt"]
 
 # Arduino principal (LEDs, buzzer, motor, ojos)
-ARDUINO_PORT         = "/dev/ttyACM0"
+ARDUINO_PORT         = "/dev/ttyACM1"
 ARDUINO_BAUD         = 115200
 ULTRASONIC_THRESHOLD = 10.0           # cm — detener motor y alertar por debajo
 
 # Arduino cuello — Demo_neck.ino (pan/tilt separado)
-NECK_PORT = "/dev/ttyACM1"
+NECK_PORT = "/dev/ttyACM0"
 NECK_BAUD = 9600
 
 # Seguimiento de cara con el motor
