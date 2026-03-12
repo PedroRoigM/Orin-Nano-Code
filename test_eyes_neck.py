@@ -16,7 +16,7 @@ sys.path.insert(0, "core")
 
 from controllers.arduino_controller import ArduinoController
 
-PORT = "/dev/ttyACM0"
+PORT = "/dev/cu.usbmodem1101"
 BAUD = 115200
 
 def pause(msg: str, seconds: float = 1.5):

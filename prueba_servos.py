@@ -2,7 +2,7 @@ import serial
 import time
 import sys
 
-PORT = "/dev/cu.usbmodem2101"   # Linux: /dev/ttyUSB0 o /dev/ttyACM0 | macOS: /dev/cu.usbmodem... | Windows: COM3
+PORT = "/dev/cu.usbmodem1101"   # Linux: /dev/ttyUSB0 o /dev/ttyACM0 | macOS: /dev/cu.usbmodem... | Windows: COM3
 BAUD = 9600
 
 def send_angle(ser, servo_id: int, angle: int):

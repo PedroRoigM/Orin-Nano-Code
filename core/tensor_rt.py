@@ -7,7 +7,10 @@ Detección de caras:   MTCNN (facenet-pytorch) en GPU CUDA si disponible
 Clasificación:        ONNX Runtime (emotion.onnx) con CUDAExecutionProvider
 Agregación:           Emoción de grupo ponderada por confianza (Counter multi-cara)
 Cámara:               CSI via GStreamer (nvarguscamerasrc)
-Hardware:             ArduinoController → LEDs, buzzer, motor, ojos, servo cuello
+Hardware:
+  · ArduinoController (/dev/ttyACM0) → LEDs, buzzer, motor, ojos
+  · Arduino cuello    (/dev/ttyACM1) → servos pan/tilt (Demo_neck.ino)
+    Protocolo: NECK:SRV_1:<pan>,<tilt>\\n
 
 Filosofía médica (ver companion_behavior.py):
   El robot NO refuerza emociones negativas. Colores y sonidos complementarios
@@ -19,6 +22,7 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 import torch
+import serial
 from facenet_pytorch import MTCNN
 from collections import Counter
 import time
@@ -27,6 +31,54 @@ from processing.emotion_color_mapper        import EmotionColorMapper
 from controllers.arduino_controller         import ArduinoController
 from controllers.camera_servo_controller    import CameraServoController
 from companion_behavior                     import BehaviorEngine, BEHAVIOR
+
+
+# ---------------------------------------------------------------------------
+# Puerto dedicado al Arduino de cuello (Demo_neck.ino)
+# Protocolo: NECK:SRV_1:<pan>,<tilt>\n
+# Traduce los comandos de CameraServoController al formato del sketch de cuello.
+# ---------------------------------------------------------------------------
+class _NeckPort:
+    """
+    Wrapper serial mínimo para el Arduino de cuello (Demo_neck.ino).
+
+    CameraServoController envía  : NECK:NECK_1:MOVE:<pan>,<tilt>
+    Demo_neck.ino espera         : NECK:SRV_1:<pan>,<tilt>
+
+    Esta clase hace la traducción y gestiona su propio puerto serial,
+    independiente del puerto principal del ArduinoController.
+    """
+
+    _PREFIX_IN  = "NECK:NECK_1:MOVE:"
+    _PREFIX_OUT = "NECK:SRV_1:"
+
+    def __init__(self, port_name: str, baud: int = 9600) -> None:
+        try:
+            self._ser = serial.Serial(port_name, baud, timeout=1)
+            print(f"[NeckPort] Abierto {port_name} @ {baud} — esperando boot Arduino (2 s)…")
+            time.sleep(2.0)
+            self._ser.reset_input_buffer()
+            print("[NeckPort] Listo.")
+        except Exception as e:
+            print(f"[NeckPort] ERROR al abrir {port_name}: {e} — cuello desactivado.")
+            self._ser = None
+
+    def send_line(self, line: str) -> None:
+        if self._ser is None or not self._ser.is_open:
+            return
+        # Traducir al formato del firmware de cuello
+        if line.startswith(self._PREFIX_IN):
+            coords = line[len(self._PREFIX_IN):]
+            line = f"{self._PREFIX_OUT}{coords}"
+        try:
+            self._ser.write((line + "\n").encode())
+        except Exception as e:
+            print(f"[NeckPort] ERROR: {e}")
+
+    def close(self) -> None:
+        if self._ser and self._ser.is_open:
+            self._ser.close()
+            print("[NeckPort] Puerto cerrado.")
 
 # ---------------------------------------------------------------------------
 # Configuración — editar aquí para ajustar el comportamiento general
@@ -39,10 +91,14 @@ OUTPUT_PATH = "/home/jetson/prueba/output.mp4"
 EMOTIONS = ["neutral", "happiness", "surprise", "sadness",
             "anger",   "disgust",   "fear",     "contempt"]
 
-# Arduino
+# Arduino principal (LEDs, buzzer, motor, ojos)
 ARDUINO_PORT         = "/dev/ttyACM0"
 ARDUINO_BAUD         = 115200
 ULTRASONIC_THRESHOLD = 10.0           # cm — detener motor y alertar por debajo
+
+# Arduino cuello — Demo_neck.ino (pan/tilt separado)
+NECK_PORT = "/dev/ttyACM1"
+NECK_BAUD = 9600
 
 # Seguimiento de cara con el motor
 DEAD_ZONE_X = 60                      # px de margen alrededor del centro
@@ -112,10 +168,11 @@ def _on_obstacle(cm: float) -> None:
 arduino.on_obstacle = _on_obstacle
 
 # ---------------------------------------------------------------------------
-# BehaviorEngine + servo de cámara
+# BehaviorEngine + servo de cámara (Arduino cuello independiente)
 # ---------------------------------------------------------------------------
-behavior  = BehaviorEngine(arduino=arduino, eyes=arduino.eyes)
-cam_servo = CameraServoController(arduino._port, verbose=False)
+behavior   = BehaviorEngine(arduino=arduino, eyes=arduino.eyes)
+_neck_port = _NeckPort(NECK_PORT, NECK_BAUD)
+cam_servo  = CameraServoController(_neck_port, verbose=False)
 cam_servo.center()
 
 # Chime y estado visual de arranque
@@ -366,6 +423,7 @@ except KeyboardInterrupt:
 
 finally:
     cam_servo.close()
+    _neck_port.close()
     arduino.stop()
     cap.release()
     out.release()
